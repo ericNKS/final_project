@@ -1,0 +1,25 @@
+# config/logging.yaml
+version: 1
+disable_existing_loggers: False
+
+formatters:
+  padrao:
+    format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+handlers:
+  console:
+    class: logging.StreamHandler
+    level: INFO
+    formatter: padrao
+    stream: ext://sys.stdout
+
+  arquivo:
+    class: logging.FileHandler
+    level: DEBUG # Salva tudo no arquivo para auditoria posterior
+    formatter: padrao
+    filename: logs/pipeline.log
+    encoding: utf8
+
+root:
+  level: INFO
+  handlers: [console, arquivo]
