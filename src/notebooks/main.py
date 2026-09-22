@@ -3,9 +3,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 import missingno as msno
+import kagglehub
 
 # %%
-trainDf = pd.read_csv("./data/archive/fraudTrain.csv")
+datasetDir = kagglehub.dataset_download("juniorbueno/pix-banking-transaction")
+
+# %%
+trainDf = pd.read_csv(f"{datasetDir}/comprovantes_pix_10000_anomalias.csv", sep=";")
+
+# %%
+trainDf.info()
 
 # %%
 trainDf.head()
