@@ -17,10 +17,22 @@ dataDf.head()
 
 # %%
 dataDf.count()
+
 # %%
 dataDf.describe()
 
 # %%
+"""
+    Como todos os dados são na moeda brasileira não faz necessario essa coluna
+"""
+
+(dataDf['Moeda'].str.strip() == 'BRL').sum()
+
+# %%
+"""
+    Como sempre existe mais transações legitimas do que fraudulentas, é pressupostos que o dataset é
+    desbalanceado. Porém é necessário uma confirmação
+"""
 class_counts = dataDf['Anomalia'].value_counts()
 legitTransactionColor = '#2ca02c'
 fraudTransactionColor = '#d62728'
@@ -56,13 +68,62 @@ dataDf['Dia_Do_Mes'] = dataDf['DataHora'].dt.day.fillna(-1).astype(int)
 # %%
 dataDf['Pagador_Is_CNPJ'] = dataDf['Pagador_CPF_CNPJ'].str.contains('/').astype(int)
 dataDf['Recebedor_Is_CNPJ'] = dataDf['Recebedor_CPF_CNPJ'].str.contains('/').astype(int)
+dataDf['Pagador_CPF_Zerado'] = (dataDf['Pagador_CPF_CNPJ'] == '000.000.000-00').astype(int)
 
 # %%
+"""
+    Verifica se a transação foi feita para o mesmo banco do remetente
+"""
+dataDf['Mesmo_Banco'] = (dataDf['Pagador_Banco'] == dataDf['Recebedor_Banco']).astype(int)
 
-# 2. Transforme as categorias do Tipo de Chave em variáveis matemáticas binárias
-# Isso criará colunas separadas como 'TipoChave_E-mail', 'TipoChave_CPF', onde 1 = Sim, 0 = Não
+# %%
+"""
+    Aqui vamos converter as colunas do tipo string que não pode ser interpretado pelo modelo matemático
+    em colunas categoricas binárias, ou seja, se a quela linha faz parte daquela categoria vai receber 1
+    se não vai receber 0
+"""
 dataDf = pd.get_dummies(dataDf, columns=['TipoChave'], dtype=int)
+dataDf = pd.get_dummies(dataDf, columns=['Status'], dtype=int)
+dataDf = pd.get_dummies(dataDf, columns=['Pagador_Banco'], dtype=int)
+dataDf = pd.get_dummies(dataDf, columns=['Recebedor_Banco'], dtype=int)
+
 # %%
+"""
+    Mostrando os tipos de chaves usadas e suas respectivas quantidades
+"""
+
+colunas_chave = [col for col in dataDf.columns if 'TipoChave' in col]
+
+frequencia_chaves = dataDf[colunas_chave].sum().sort_values(ascending=False)
+
+# Limpar o nome das colunas para o gráfico ficar legível (removendo o "TipoChave_")
+frequencia_chaves.index = frequencia_chaves.index.str.replace('TipoChave_', '')
+
+ax = frequencia_chaves.plot(
+    kind='bar', 
+    color='#1f77b4', 
+    figsize=(10, 6)
+)
+
+plt.title('Distribuição dos Tipos de Chave Pix Utilizadas', fontsize=14, pad=15, fontweight='bold')
+plt.xlabel('Tipo de Chave', fontweight='bold')
+plt.ylabel('Volume de Transações', fontweight='bold')
+plt.xticks(rotation=45, ha='right')
+
+# Adiciona os rótulos numéricos em cima de cada barra
+for container in ax.containers:
+    ax.bar_label(container, fmt='%d', padding=3)
+
+plt.tight_layout()
+plt.show()
+
+# %%
+frequencia_clientes = dataDf['Pagador_CPF_CNPJ'].value_counts()
+# %%
+
+"""
+    Limpar dados sensíveis e que possa causar ruído no aprendizado
+"""
 columnsToDrop = [
     'EndToEndId', 
     'Pagador_Nome', 
@@ -70,10 +131,13 @@ columnsToDrop = [
     'Recebedor_Nome', 
     'Recebedor_CPF_CNPJ',
     'ChavePix_Utilizada',
-    'DataHora'
+    'DataHora',
+    'Moeda',
+    'Descricao'
 ]
 
 dataDf = dataDf.drop(columns=columnsToDrop)
 
 # %%
 dataDf.info()
+# %%
