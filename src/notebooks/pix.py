@@ -1,7 +1,15 @@
 # %%
+import kagglehub
 import pandas as pd
 import matplotlib.pyplot as plt
-import kagglehub
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, recall_score, precision_score, f1_score, auc
+import xgboost as xgb
+from imblearn.over_sampling import SMOTE
+from imblearn.under_sampling import RandomUnderSampler
+from imblearn.combine import SMOTETomek, SMOTEENN
+from imblearn.pipeline import Pipeline as ImbPipeline
 
 # %%
 datasetDir = kagglehub.dataset_download("juniorbueno/pix-banking-transaction")
@@ -139,5 +147,28 @@ columnsToDrop = [
 dataDf = dataDf.drop(columns=columnsToDrop)
 
 # %%
-dataDf.info()
+"""
+    Separação dos dados de treinamento e de teste
+    Garantindo que o target (YdataDf) vai ter a proporção mantida
+"""
+XDataDf = dataDf.drop(["Anomalia"], axis=1)
+YDataDf = dataDf["Anomalia"]
+
+XTrain, XTest, yTrain, yTest = train_test_split(
+    XDataDf, YDataDf, test_size=0.2,
+    stratify=YDataDf, random_state=42
+)
+
+# %%
+"""
+Criando treinamentos com diferentes tipos de balanceamento
+"""
+
+# Oversampling
+overXtrain, overYtrain = SMOTE(random_state=42).fit_resample(XTrain, yTrain)
+# Undersampling
+underXtrain, underYtrain = RandomUnderSampler(random_state=42).fit_resample(XTrain, yTrain)
+# Combinado
+mixXtrain, mixYtrain = SMOTETomek(random_state=42).fit_resample(XTrain, yTrain)
+
 # %%
