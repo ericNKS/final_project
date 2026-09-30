@@ -3,8 +3,7 @@ import kagglehub
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, recall_score, precision_score, f1_score, auc
+from sklearn.model_selection import train_test_split, cross_val_score, cross_validate
 import xgboost as xgb
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
@@ -160,15 +159,97 @@ XTrain, XTest, yTrain, yTest = train_test_split(
 )
 
 # %%
-"""
-Criando treinamentos com diferentes tipos de balanceamento
-"""
-
-# Oversampling
-overXtrain, overYtrain = SMOTE(random_state=42).fit_resample(XTrain, yTrain)
-# Undersampling
-underXtrain, underYtrain = RandomUnderSampler(random_state=42).fit_resample(XTrain, yTrain)
-# Combinado
-mixXtrain, mixYtrain = SMOTETomek(random_state=42).fit_resample(XTrain, yTrain)
+XTrain.shape, XTest.shape
 
 # %%
+
+scoring = {
+    "accuracy": "accuracy",
+    "precision": "precision",
+    "recall": "recall",
+    "f1": "f1",
+    "roc_auc": "roc_auc"
+}
+
+# %%
+
+classifier = xgb.XGBClassifier(
+    max_depth=8,
+    learning_rate=0.1,
+    n_estimators=40,
+    random_state=0,
+    min_child_weight=1,
+    subsample=1,
+    colsample_bytree=1,
+    colsample_bynode=0.9,
+    num_parallel_tree=1,
+    scale_pos_weight=3,
+    tree_method='hist',
+)
+100 * cross_val_score(classifier, XTrain, yTrain).mean()
+
+# %%
+
+overClassifier = xgb.XGBClassifier(
+    max_depth=12,
+    learning_rate=0.1,
+    n_estimators=100,
+    random_state=0,
+    min_child_weight=1,
+    subsample=1,
+    colsample_bytree=1,
+    colsample_bynode=0.9,
+    num_parallel_tree=1,
+    scale_pos_weight=1,
+    tree_method='hist',
+)
+
+overPipeline = ImbPipeline([
+    ("sampler", SMOTE(random_state=42)),
+    ("classifier", overClassifier)
+])
+100 * cross_val_score(overPipeline, XTrain, yTrain).mean()
+
+# %%
+underClassifier = xgb.XGBClassifier(
+    max_depth=1,
+    learning_rate=0.001,
+    n_estimators=200,
+    random_state=0,
+    min_child_weight=1,
+    subsample=1,
+    colsample_bytree=0.5,
+    colsample_bynode=1,
+    num_parallel_tree=1,
+    scale_pos_weight=0.8,
+    tree_method='hist',
+)
+
+underPipeline = ImbPipeline([
+    ("sampler", RandomUnderSampler(random_state=42)),
+    ("classifier", underClassifier)
+])
+
+100 * cross_val_score(underPipeline, XTrain, yTrain).mean()
+
+# %%
+mixClassifier = xgb.XGBClassifier(
+    max_depth=14,
+    learning_rate=0.1,
+    n_estimators=40,
+    random_state=5,
+    min_child_weight=0,
+    subsample=1,
+    colsample_bytree=0.5,
+    colsample_bynode=1,
+    num_parallel_tree=2,
+    scale_pos_weight=2.8,
+    tree_method='hist',
+)
+
+mixPipeline = ImbPipeline([
+    ("sampler", SMOTETomek(random_state=42)),
+    ("classifier", mixClassifier)
+])
+
+100 * cross_val_score(mixPipeline, XTrain, yTrain).mean()
