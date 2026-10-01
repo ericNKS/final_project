@@ -2,12 +2,14 @@
 import kagglehub
 import pandas as pd
 import matplotlib.pyplot as plt
-import numpy as np
-from sklearn.model_selection import train_test_split, cross_val_score, cross_validate
+from sklearn.compose import ColumnTransformer
+from sklearn.model_selection import train_test_split, cross_validate, TunedThresholdClassifierCV
+from sklearn.preprocessing import OneHotEncoder
+from sklearn.metrics import make_scorer, precision_score, recall_score, f1_score
 import xgboost as xgb
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
-from imblearn.combine import SMOTETomek, SMOTEENN
+from imblearn.combine import SMOTETomek
 from imblearn.pipeline import Pipeline as ImbPipeline
 
 # %%
@@ -81,51 +83,55 @@ dataDf['Pagador_CPF_Zerado'] = (dataDf['Pagador_CPF_CNPJ'] == '000.000.000-00').
 """
     Verifica se a transação foi feita para o mesmo banco do remetente
 """
-dataDf['Mesmo_Banco'] = (dataDf['Pagador_Banco'] == dataDf['Recebedor_Banco']).astype(int)
+dataDf['Mesmo_Banco'] = (
+    dataDf['Pagador_Banco'] == dataDf['Recebedor_Banco']
+).astype(int)
 
-# %%
-"""
-    Aqui vamos converter as colunas do tipo string que não pode ser interpretado pelo modelo matemático
-    em colunas categoricas binárias, ou seja, se a quela linha faz parte daquela categoria vai receber 1
-    se não vai receber 0
-"""
-dataDf = pd.get_dummies(dataDf, columns=['TipoChave'], dtype=int)
-dataDf = pd.get_dummies(dataDf, columns=['Status'], dtype=int)
-dataDf = pd.get_dummies(dataDf, columns=['Pagador_Banco'], dtype=int)
-dataDf = pd.get_dummies(dataDf, columns=['Recebedor_Banco'], dtype=int)
+contagem = dataDf[dataDf['Anomalia'] == 1]['Mesmo_Banco'].value_counts()
+
+contagem.index = ['Bancos diferentes', 'Mesmo banco']
+
+contagem.plot(
+    kind='bar',
+    xlabel='Tipo de transação',
+    ylabel='Quantidade',
+    title='Transações entre bancos',
+    rot=0
+)
+
+plt.show()
 
 # %%
 """
     Mostrando os tipos de chaves usadas e suas respectivas quantidades
 """
 
-colunas_chave = [col for col in dataDf.columns if 'TipoChave' in col]
-
-frequencia_chaves = dataDf[colunas_chave].sum().sort_values(ascending=False)
-
-# Limpar o nome das colunas para o gráfico ficar legível (removendo o "TipoChave_")
-frequencia_chaves.index = frequencia_chaves.index.str.replace('TipoChave_', '')
+frequencia_chaves = dataDf[dataDf['Anomalia'] == 1]['TipoChave'].value_counts()
 
 ax = frequencia_chaves.plot(
-    kind='bar', 
-    color='#1f77b4', 
+    kind='bar',
+    color='#1f77b4',
     figsize=(10, 6)
 )
 
-plt.title('Distribuição dos Tipos de Chave Pix Utilizadas', fontsize=14, pad=15, fontweight='bold')
+plt.title(
+    'Distribuição dos Tipos de Chave Pix Utilizadas',
+    fontsize=14,
+    pad=15,
+    fontweight='bold'
+)
+
 plt.xlabel('Tipo de Chave', fontweight='bold')
 plt.ylabel('Volume de Transações', fontweight='bold')
 plt.xticks(rotation=45, ha='right')
 
-# Adiciona os rótulos numéricos em cima de cada barra
+# Rótulos numéricos em cima das barras
 for container in ax.containers:
     ax.bar_label(container, fmt='%d', padding=3)
 
 plt.tight_layout()
 plt.show()
 
-# %%
-frequencia_clientes = dataDf['Pagador_CPF_CNPJ'].value_counts()
 # %%
 
 """
@@ -162,13 +168,47 @@ XTrain, XTest, yTrain, yTest = train_test_split(
 XTrain.shape, XTest.shape
 
 # %%
+categoricalFeatures = [
+    'TipoChave',
+    'Status',
+    'Pagador_Banco',
+    'Recebedor_Banco'
+]
 
+numericFeatures = [
+    'Valor',
+    'Hora',
+    'Dia_Da_Semana',
+    'Dia_Do_Mes',
+    'Pagador_Is_CNPJ',
+    'Recebedor_Is_CNPJ',
+    'Pagador_CPF_Zerado',
+    'Mesmo_Banco'
+]
+
+preprocessor = ColumnTransformer(
+    transformers=[
+        (
+            'categorical',
+            OneHotEncoder(
+                handle_unknown='ignore',
+                sparse_output=False
+            ),
+            categoricalFeatures
+        ),
+        (
+            'numeric',
+            'passthrough',
+            numericFeatures
+        )
+    ]
+)
 scoring = {
     "accuracy": "accuracy",
-    "precision": "precision",
-    "recall": "recall",
-    "f1": "f1",
-    "roc_auc": "roc_auc"
+    "precision": make_scorer(precision_score, zero_division=0),
+    "recall": make_scorer(recall_score, zero_division=0),
+    "f1": make_scorer(f1_score, zero_division=0),
+    "roc_auc": "roc_auc",
 }
 
 # %%
@@ -186,7 +226,19 @@ classifier = xgb.XGBClassifier(
     scale_pos_weight=3,
     tree_method='hist',
 )
-100 * cross_val_score(classifier, XTrain, yTrain).mean()
+
+rawPipeline = ImbPipeline([
+    ("preprocessor", preprocessor),
+    ("classifier", classifier)
+])
+
+results = cross_validate(
+    rawPipeline,
+    XTrain,
+    yTrain,
+    scoring=scoring,
+    cv=5
+)
 
 # %%
 
@@ -205,32 +257,47 @@ overClassifier = xgb.XGBClassifier(
 )
 
 overPipeline = ImbPipeline([
+    ("preprocessor", preprocessor),
     ("sampler", SMOTE(random_state=42)),
     ("classifier", overClassifier)
 ])
-100 * cross_val_score(overPipeline, XTrain, yTrain).mean()
+
+tuned = TunedThresholdClassifierCV(overPipeline, scoring="f1", cv=5)
+
+overResults = cross_validate(
+    overPipeline,
+    XTrain,
+    yTrain,
+    scoring=scoring,
+    cv=5
+)
 
 # %%
 underClassifier = xgb.XGBClassifier(
-    max_depth=1,
-    learning_rate=0.001,
+    max_depth=3,
+    learning_rate=0.1,
     n_estimators=200,
     random_state=0,
-    min_child_weight=1,
-    subsample=1,
-    colsample_bytree=0.5,
-    colsample_bynode=1,
-    num_parallel_tree=1,
-    scale_pos_weight=0.8,
+    colsample_bytree=0.8,
+    scale_pos_weight=1,
     tree_method='hist',
 )
 
 underPipeline = ImbPipeline([
-    ("sampler", RandomUnderSampler(random_state=42)),
+    ("preprocessor", preprocessor),
+    ("sampler", RandomUnderSampler(sampling_strategy=0.1, random_state=42)),
     ("classifier", underClassifier)
 ])
 
-100 * cross_val_score(underPipeline, XTrain, yTrain).mean()
+tuned = TunedThresholdClassifierCV(underPipeline, scoring="f1", cv=5)
+
+underResults = cross_validate(
+    tuned,
+    XTrain,
+    yTrain,
+    scoring=scoring,
+    cv=5
+)
 
 # %%
 mixClassifier = xgb.XGBClassifier(
@@ -248,8 +315,15 @@ mixClassifier = xgb.XGBClassifier(
 )
 
 mixPipeline = ImbPipeline([
+    ("preprocessor", preprocessor),
     ("sampler", SMOTETomek(random_state=42)),
     ("classifier", mixClassifier)
 ])
 
-100 * cross_val_score(mixPipeline, XTrain, yTrain).mean()
+mixResults = cross_validate(
+    mixPipeline,
+    XTrain,
+    yTrain,
+    scoring=scoring,
+    cv=5
+)
