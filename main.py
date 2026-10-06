@@ -1,3 +1,9 @@
+from sklearn.ensemble import RandomForestClassifier
+from src.models.random_forest import crossValidate as crossValidateRandomForest
+from src.models.logistic_regression import (
+    crossValidate as crossValidateLogisticRegression,
+    getClassifier as getLogisticClassifier,
+)
 # %%
 from imblearn.combine import SMOTETomek
 from imblearn.over_sampling import SMOTE
@@ -135,9 +141,9 @@ mixXgbResults = crossValidate(
 
 modelNames = [
     "XGBoost",
-    "overXgbResults",
-    "underXgbResults",
-    "mixXgbResults"
+    "XGBoost + SMOTE",
+    "XGBoost + Under",
+    "XGBoost + SMOTETomek"
 ]
 
 results = [
@@ -240,9 +246,9 @@ tunedUixXgbResults = crossValidate(
 
 tunedModelNames = [
     "XGBoost",
-    "overXgbResults",
-    "underXgbResults",
-    "mixXgbResults"
+    "XGBoost + SMOTE",
+    "XGBoost + Under",
+    "XGBoost + SMOTETomek"
 ]
 
 tunedResults = [
@@ -256,6 +262,76 @@ print("Cross Validation with different sampling strategies and hyperparameter tu
 printTrainResult(tunedModelNames, *tunedResults)
 
 # %%
+
+# Random Forest: mesmas particoes, metricas e estrategias do XGBoost.
+# Os parametros ajustados sao configuracoes iniciais, sem busca automatica.
+forestStrategies = [
+    ("Random Forest", None),
+    ("Random Forest + SMOTE", SMOTE(random_state=42)),
+    ("Random Forest + Under", RandomUnderSampler(sampling_strategy=0.1, random_state=42)),
+    ("Random Forest + SMOTETomek", SMOTETomek(random_state=42)),
+]
+
+forestResults = []
+adjustedForestResults = []
+
+for forestName, forestSampler in forestStrategies:
+    forestResults.append(crossValidateRandomForest(
+        df=pixDf,
+        XTrain=XTrain,
+        yTrain=yTrain,
+        sampler=forestSampler,
+    ))
+    adjustedForestResults.append(crossValidateRandomForest(
+        df=pixDf,
+        XTrain=XTrain,
+        yTrain=yTrain,
+        sampler=forestSampler,
+        classifier=RandomForestClassifier(
+            n_estimators=200,
+            max_depth=12,
+            min_samples_leaf=2,
+            class_weight="balanced" if forestSampler is None else None,
+            random_state=42,
+            n_jobs=-1,
+        ),
+    ))
+
+forestNames = [name for name, _ in forestStrategies]
+print("Random Forest: configuracao padrao")
+printTrainResult(forestNames, *forestResults)
+print("Random Forest: configuracao ajustada")
+printTrainResult(forestNames, *adjustedForestResults)
+
+# Inclui Random Forest nos graficos comparativos existentes.
+modelNames.extend(forestNames)
+results.extend(forestResults)
+tunedModelNames.extend(forestNames)
+tunedResults.extend(adjustedForestResults)
+
+# Regressão logística: mesmas partições, com padronização dentro dos folds.
+logisticStrategies = [
+    ("Regressão Logística", None),
+    ("Regressão Logística + SMOTE", SMOTE(random_state=42)),
+    ("Regressão Logística + Under", RandomUnderSampler(sampling_strategy=0.1, random_state=42)),
+    ("Regressão Logística + SMOTETomek", SMOTETomek(random_state=42)),
+]
+logisticResults, adjustedLogisticResults = [], []
+for logisticName, logisticSampler in logisticStrategies:
+    for adjusted, destination in ((False, logisticResults), (True, adjustedLogisticResults)):
+        destination.append(crossValidateLogisticRegression(
+            df=pixDf, XTrain=XTrain, yTrain=yTrain, sampler=logisticSampler,
+            classifier=getLogisticClassifier(adjusted=adjusted, sampler=logisticSampler),
+        ))
+logisticNames = [name for name, _ in logisticStrategies]
+print("Regressão Logística: configuração padrão")
+printTrainResult(logisticNames, *logisticResults)
+print("Regressão Logística: configuração ajustada manualmente")
+printTrainResult(logisticNames, *adjustedLogisticResults)
+modelNames.extend(logisticNames)
+results.extend(logisticResults)
+tunedModelNames.extend(logisticNames)
+tunedResults.extend(adjustedLogisticResults)
 
 metrics = {
     "Accuracy": "test_accuracy",
@@ -286,7 +362,7 @@ for metricName in metrics:
     x = np.arange(len(modelNames))
     width = 0.35
 
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(18, 7))
 
     semTunagem = comparison[metricName]["Sem Tunagem"]
     comTunagem = comparison[metricName]["Com Tunagem"]

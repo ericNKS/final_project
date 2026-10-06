@@ -1,0 +1,4 @@
+modelo,nome,accuracy,precision,recall,f1,roc_auc,average_precision,tn,fp,fn,tp,tempo_fit_s
+Random Forest,Random Forest | Sem reamostragem | Padrão,0.9995,1.0,0.95,0.9743589743589743,0.9701262626262627,0.9505000000000001,1980,0,1,19,0.21087859999988723
+XGBoost,XGBoost | SMOTE | Ajustada,0.999,0.95,0.95,0.95,0.9579545454545455,0.9480938242280285,1979,1,1,19,0.4820887999999286
+Regressão Logística,Regressão Logística | Under | Padrão,0.993,0.8,0.4,0.5333333333333333,0.9044191919191918,0.47735664251624993,1978,2,12,8,0.021270300000196585
