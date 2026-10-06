@@ -1,0 +1,30 @@
+{
+  "dataset": "juniorbueno/pix-banking-transaction",
+  "arquivo": "comprovantes_pix_10000_anomalias.csv",
+  "registros": 10000,
+  "treino": 8000,
+  "teste": 2000,
+  "classes_total": {
+    "0": 9900,
+    "1": 100
+  },
+  "classes_treino": {
+    "0": 7920,
+    "1": 80
+  },
+  "classes_teste": {
+    "0": 1980,
+    "1": 20
+  },
+  "random_state": 42,
+  "folds": 5,
+  "embaralhamento_folds": false,
+  "selecao": "Maior F1 medio de validacao; desempate por AP e ROC-AUC",
+  "limiar": 0.5,
+  "jobs": 4,
+  "selecionados": {
+    "Random Forest": "Random Forest | Sem reamostragem | Padrão",
+    "XGBoost": "XGBoost | SMOTE | Ajustada",
+    "Regressão Logística": "Regressão Logística | Under | Padrão"
+  }
+}

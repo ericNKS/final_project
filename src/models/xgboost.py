@@ -30,7 +30,8 @@ def getTrainTestSplit(df: DataFrame, testSize: float = 0.2, randomState: int = 4
 
 def _getPipeline(
     sampler,
-    classifier
+    classifier,
+    numeric_transformer="passthrough",
 ):
     categoricalFeatures = [
         'TipoChave',
@@ -62,7 +63,7 @@ def _getPipeline(
             ),
             (
                 'numeric',
-                'passthrough',
+                numeric_transformer,
                 numericFeatures
             )
         ]
