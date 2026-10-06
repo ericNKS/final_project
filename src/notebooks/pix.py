@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split, cross_validate, TunedThresholdClassifierCV
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.metrics import make_scorer, precision_score, recall_score, f1_score
+from sklearn.metrics import make_scorer, precision_score, recall_score, f1_score, average_precision_score
 import xgboost as xgb
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
@@ -262,10 +262,10 @@ overPipeline = ImbPipeline([
     ("classifier", overClassifier)
 ])
 
-tuned = TunedThresholdClassifierCV(overPipeline, scoring="f1", cv=5)
+overTuned = TunedThresholdClassifierCV(overPipeline, scoring="f1", cv=5)
 
 overResults = cross_validate(
-    overPipeline,
+    overTuned,
     XTrain,
     yTrain,
     scoring=scoring,
@@ -289,10 +289,10 @@ underPipeline = ImbPipeline([
     ("classifier", underClassifier)
 ])
 
-tuned = TunedThresholdClassifierCV(underPipeline, scoring="f1", cv=5)
+underTuned = TunedThresholdClassifierCV(underPipeline, scoring="f1", cv=5)
 
 underResults = cross_validate(
-    tuned,
+    underTuned,
     XTrain,
     yTrain,
     scoring=scoring,
@@ -320,10 +320,22 @@ mixPipeline = ImbPipeline([
     ("classifier", mixClassifier)
 ])
 
+mixTuned = TunedThresholdClassifierCV(mixPipeline, scoring="f1", cv=5)
+
 mixResults = cross_validate(
-    mixPipeline,
+    mixTuned,
     XTrain,
     yTrain,
     scoring=scoring,
     cv=5
 )
+
+# %%
+overTuned.fit(XTrain, yTrain)
+
+# Probabilidades da classe fraude no conjunto de teste
+y_scores = overTuned.predict_proba(XTest)[:, 1]
+
+pr_auc = average_precision_score(yTest, y_scores)
+print(f"PR-AUC (Average Precision): {pr_auc:.4f}")
+print(f"Baseline (aleatório): {yTest.mean():.4f}")

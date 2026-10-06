@@ -82,10 +82,13 @@ def crossValidate(
     XTrain,
     yTrain,
     sampler=None,
-    classifier=xgb.XGBClassifier()
+    classifier=xgb.XGBClassifier(),
+    tuned=False
 ):
     rawPipeline = _getPipeline(classifier=classifier, sampler=sampler)
-
+    if tuned:
+        rawPipeline = TunedThresholdClassifierCV(rawPipeline, scoring="f1")
+    
     return cross_validate(
         rawPipeline,
         XTrain,

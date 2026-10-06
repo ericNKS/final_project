@@ -175,6 +175,7 @@ tunedXgbResults = crossValidate(
         tree_method='hist',
     ),
     sampler=None,
+    tuned=True
 )
 
 tunedOverXgbResults = crossValidate(
@@ -195,6 +196,7 @@ tunedOverXgbResults = crossValidate(
         tree_method='hist',
     ),
     sampler=SMOTE(random_state=42),
+    tuned=True
 )
 
 tunedUnderXgbResults = crossValidate(
@@ -211,6 +213,7 @@ tunedUnderXgbResults = crossValidate(
         tree_method='hist',
     ),
     sampler=RandomUnderSampler(sampling_strategy=0.1, random_state=42),
+    tuned=True
 )
 
 tunedUixXgbResults = crossValidate(
@@ -230,7 +233,8 @@ tunedUixXgbResults = crossValidate(
         scale_pos_weight=2.8,
         tree_method='hist',
     ),
-    sampler=SMOTETomek(random_state=42)
+    sampler=SMOTETomek(random_state=42),
+    tuned=True
 )
 
 
