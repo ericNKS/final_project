@@ -3,6 +3,7 @@ from imblearn.combine import SMOTETomek
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.compose import ColumnTransformer
 from sklearn.metrics import f1_score, make_scorer, precision_score, recall_score
@@ -15,22 +16,62 @@ from imblearn.pipeline import Pipeline as ImbPipeline
 dataDf = pd.read_parquet("hf://datasets/andremessina/pix-fraud-br/data/train-00000-of-00001.parquet")
 
 # %%
+dataDf
+
+# %%
 dataDf['DataHora'] = pd.to_datetime(dataDf['datetime_brasilia'], errors='coerce')
 dataDf['Hora'] = dataDf['DataHora'].dt.hour.fillna(-1).astype(int)
 dataDf['Dia_Da_Semana'] = dataDf['DataHora'].dt.dayofweek.fillna(-1).astype(int)  # 0 = Monday, 6 = Sunday
-dataDf['Dia_Do_Mes'] = dataDf['DataHora'].dt.day.fillna(-1).astype(int)
-
-columnsToDrop = [
-    'datetime_brasilia', 
-    'hora_dia', 
-    'dia_semana', 
-    'id_recebedor', 
-    'id_pagador',
-    'datetime_brasilia',
-]
 
 # %%
+pagadorGroup = dataDf.groupby(
+    "id_pagador",
+    sort=False
+)
 
+# Quantidade de transações ANTERIORES do pagador
+dataDf["qtd_transacoes_pagador"] = (
+    pagadorGroup.cumcount()
+)
+
+# Soma acumulada incluindo a transação atual
+somaPagador = (
+    pagadorGroup["valor_brl"]
+    .cumsum()
+)
+
+# Quantidade de transações anteriores
+qtdAnteriorPagador = (
+    dataDf["qtd_transacoes_pagador"]
+)
+
+# Média APENAS das transações anteriores
+dataDf["media_valor_pagador"] = np.where(
+    qtdAnteriorPagador > 0,
+    (
+        somaPagador - dataDf["valor_brl"]
+    ) / qtdAnteriorPagador,
+    np.nan
+)
+
+dataDf["mediana_valor_pagador"] = (
+    dataDf
+    .groupby(
+        "id_pagador",
+        sort=False
+    )["valor_brl"]
+    .expanding()
+    .median()
+    .groupby(level=0)
+    .shift(1)
+    .reset_index(
+        level=0,
+        drop=True
+    )
+    .reindex(dataDf.index)
+)
+
+# %%
 frequencia_chaves = dataDf[dataDf['fraude'] == 1]['tipo_transacao'].value_counts()
 
 ax = frequencia_chaves.plot(
@@ -59,6 +100,13 @@ plt.show()
 
 
 # %%
+columnsToDrop = [
+    'hora_dia', 
+    'dia_semana', 
+    'id_recebedor', 
+    'id_pagador',
+    'datetime_brasilia',
+]
 categoricalFeatures = [
     'tipo_transacao',
 ]
@@ -71,12 +119,14 @@ numericFeatures = [
     'saldo_posterior_recebedor',
     'Hora',
     'Dia_Da_Semana',
-    'Dia_Do_Mes',
     'dia_util',
     'horario_noturno',
     'acima_limite_noturno',
     'razao_saldo_residual',
     'proporcao_valor_recebedor',
+    'qtd_transacoes_pagador',
+    'media_valor_pagador',
+    'mediana_valor_pagador'
 ]
 
 preprocessor = ColumnTransformer(

@@ -1,0 +1,43 @@
+{
+  "modelo": "XGBoost (Baseline)",
+  "limiar_otimizado": 0.6264405846595764,
+  "metricas_teste_400k": {
+    "accuracy": 0.9970025,
+    "precision": 0.8105960264900662,
+    "recall": 0.7960975609756098,
+    "f1": 0.8032813781788352,
+    "roc_auc": 0.9975983228794938,
+    "pr_auc": 0.8841303058732671
+  },
+  "impacto_financeiro_teste_400k": {
+    "volume_total_fraudes_brl": 4405302309.059999,
+    "volume_fraudes_interceptadas_brl": 3955017221.1400003,
+    "volume_fraudes_nao_detectadas_brl": 450285087.91999996,
+    "volume_falsos_positivos_brl": 452574394.53,
+    "pct_financeiro_salvo": 89.77856554829535
+  },
+  "particoes": {
+    "treino_80_2m": 1600000,
+    "teste_20_2m": 400000,
+    "amostra_tunagem": 80000
+  },
+  "features_utilizadas": [
+    "tipo_transacao",
+    "valor_brl",
+    "saldo_anterior_pagador",
+    "saldo_posterior_pagador",
+    "saldo_anterior_recebedor",
+    "saldo_posterior_recebedor",
+    "dia_util",
+    "horario_noturno",
+    "acima_limite_noturno",
+    "razao_saldo_residual",
+    "proporcao_valor_recebedor",
+    "Hora",
+    "Dia_Da_Semana",
+    "qtd_transacoes_pagador",
+    "media_valor_pagador",
+    "mediana_valor_pagador"
+  ],
+  "data_treinamento": "2026-10-10T22:58:00.615768"
+}

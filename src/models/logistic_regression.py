@@ -1,7 +1,7 @@
 """Regressão logística com padronização e reamostragem dentro dos folds."""
 
 from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import cross_validate
+from sklearn.model_selection import TunedThresholdClassifierCV, cross_validate
 from sklearn.preprocessing import StandardScaler
 
 from src.models.xgboost import _getPipeline, scoring
@@ -29,10 +29,14 @@ def getPipeline(sampler=None, classifier=None):
     )
 
 
-def crossValidate(df, XTrain, yTrain, sampler=None, classifier=None):
+def crossValidate(df, XTrain, yTrain, sampler=None, classifier=None, tuned=False):
     """Avalia cinco folds; df mantém a interface dos outros modelos."""
+    pipeline = getPipeline(sampler=sampler, classifier=classifier)
+    if tuned:
+        pipeline = TunedThresholdClassifierCV(pipeline, scoring="f1")
+        
     return cross_validate(
-        getPipeline(sampler=sampler, classifier=classifier),
+        pipeline,
         XTrain,
         yTrain,
         scoring=scoring,
