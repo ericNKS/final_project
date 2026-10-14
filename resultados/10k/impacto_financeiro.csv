@@ -1,0 +1,4 @@
+Variante,Anomalias sinalizadas,Anomalias não detectadas,Falsos alarmes
+XGBoost | SMOTE,37148.66,4423.06,5.62
+Random Forest | Baseline,37148.66,4423.06,2428.33
+Regressão Logística | Under-sampling,20812.260000000002,20759.46,0.0

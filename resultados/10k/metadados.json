@@ -1,0 +1,147 @@
+{
+  "dataset": 10000,
+  "treino": 8000,
+  "teste": 2000,
+  "anomalias_teste": 20,
+  "modelo_final_notebook": "Random Forest | Baseline",
+  "selecionados_por_familia": {
+    "XGBoost": "XGBoost | SMOTE",
+    "Random Forest": "Random Forest | Baseline",
+    "Regressão Logística": "Regressão Logística | Under-sampling"
+  },
+  "nota": "Variantes possuem hiperparâmetros diferentes; comparação não isola apenas balanceamento.",
+  "metricas": [
+    {
+      "Modelo": "XGBoost",
+      "Balanceamento": "Baseline",
+      "Variante": "XGBoost | Baseline",
+      "Limiar": 0.1200885325670242,
+      "PR_AUC": 0.9351998761837388,
+      "ROC_AUC": 0.963270202020202,
+      "F1": 0.9047619047619048,
+      "Precision": 0.8636363636363636,
+      "Recall": 0.95
+    },
+    {
+      "Modelo": "XGBoost",
+      "Balanceamento": "SMOTE",
+      "Variante": "XGBoost | SMOTE",
+      "Limiar": 0.2827441990375519,
+      "PR_AUC": 0.9454464557347124,
+      "ROC_AUC": 0.9567676767676768,
+      "F1": 0.95,
+      "Precision": 0.95,
+      "Recall": 0.95
+    },
+    {
+      "Modelo": "XGBoost",
+      "Balanceamento": "Under-sampling",
+      "Variante": "XGBoost | Under-sampling",
+      "Limiar": 0.5401985049247742,
+      "PR_AUC": 0.9453737267625864,
+      "ROC_AUC": 0.950479797979798,
+      "F1": 0.95,
+      "Precision": 0.95,
+      "Recall": 0.95
+    },
+    {
+      "Modelo": "XGBoost",
+      "Balanceamento": "SMOTE + Tomek",
+      "Variante": "XGBoost | SMOTE + Tomek",
+      "Limiar": 0.1898791044950485,
+      "PR_AUC": 0.939674125775934,
+      "ROC_AUC": 0.9522727272727272,
+      "F1": 0.8947368421052632,
+      "Precision": 0.9444444444444444,
+      "Recall": 0.85
+    },
+    {
+      "Modelo": "Random Forest",
+      "Balanceamento": "Baseline",
+      "Variante": "Random Forest | Baseline",
+      "Limiar": 0.3675279709600502,
+      "PR_AUC": 0.950520020800832,
+      "ROC_AUC": 0.9519444444444444,
+      "F1": 0.95,
+      "Precision": 0.95,
+      "Recall": 0.95
+    },
+    {
+      "Modelo": "Random Forest",
+      "Balanceamento": "SMOTE",
+      "Variante": "Random Forest | SMOTE",
+      "Limiar": 0.3757672819656404,
+      "PR_AUC": 0.95068870523416,
+      "ROC_AUC": 0.9638383838383838,
+      "F1": 0.9743589743589745,
+      "Precision": 1.0,
+      "Recall": 0.95
+    },
+    {
+      "Modelo": "Random Forest",
+      "Balanceamento": "Under-sampling",
+      "Variante": "Random Forest | Under-sampling",
+      "Limiar": 0.4899934297091487,
+      "PR_AUC": 0.9507183908045976,
+      "ROC_AUC": 0.9653535353535352,
+      "F1": 0.9743589743589745,
+      "Precision": 1.0,
+      "Recall": 0.95
+    },
+    {
+      "Modelo": "Random Forest",
+      "Balanceamento": "SMOTE + Tomek",
+      "Variante": "Random Forest | SMOTE + Tomek",
+      "Limiar": 0.4295813932331564,
+      "PR_AUC": 0.9506027727546714,
+      "ROC_AUC": 0.9586111111111112,
+      "F1": 0.9743589743589745,
+      "Precision": 1.0,
+      "Recall": 0.95
+    },
+    {
+      "Modelo": "Regressão Logística",
+      "Balanceamento": "Baseline",
+      "Variante": "Regressão Logística | Baseline",
+      "Limiar": 0.9797981799024992,
+      "PR_AUC": 0.4609021568184542,
+      "ROC_AUC": 0.8691666666666666,
+      "F1": 0.5714285714285714,
+      "Precision": 1.0,
+      "Recall": 0.4
+    },
+    {
+      "Modelo": "Regressão Logística",
+      "Balanceamento": "SMOTE",
+      "Variante": "Regressão Logística | SMOTE",
+      "Limiar": 0.9797980114054144,
+      "PR_AUC": 0.4810396844495344,
+      "ROC_AUC": 0.8798737373737374,
+      "F1": 0.5714285714285714,
+      "Precision": 1.0,
+      "Recall": 0.4
+    },
+    {
+      "Modelo": "Regressão Logística",
+      "Balanceamento": "Under-sampling",
+      "Variante": "Regressão Logística | Under-sampling",
+      "Limiar": 0.7272805077803761,
+      "PR_AUC": 0.511916749947046,
+      "ROC_AUC": 0.8940151515151515,
+      "F1": 0.5714285714285714,
+      "Precision": 1.0,
+      "Recall": 0.4
+    },
+    {
+      "Modelo": "Regressão Logística",
+      "Balanceamento": "SMOTE + Tomek",
+      "Variante": "Regressão Logística | SMOTE + Tomek",
+      "Limiar": 0.9797980114054144,
+      "PR_AUC": 0.4810396844495344,
+      "ROC_AUC": 0.8798737373737374,
+      "F1": 0.5714285714285714,
+      "Precision": 1.0,
+      "Recall": 0.4
+    }
+  ]
+}

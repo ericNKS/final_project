@@ -1,11 +1,16 @@
 # %%
 import kagglehub
+import truststore
+from pathlib import Path
+from sklearn.base import clone
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split, cross_validate, TunedThresholdClassifierCV
-from sklearn.preprocessing import OneHotEncoder
-from sklearn.metrics import make_scorer, precision_score, recall_score, f1_score, average_precision_score
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.metrics import make_scorer, precision_score, recall_score, f1_score, average_precision_score, roc_auc_score
 import xgboost as xgb
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
@@ -13,7 +18,10 @@ from imblearn.combine import SMOTETomek
 from imblearn.pipeline import Pipeline as ImbPipeline
 
 # %%
-datasetDir = kagglehub.dataset_download("juniorbueno/pix-banking-transaction")
+truststore.inject_into_ssl()
+# Reutiliza o dataset já baixado; consulta o Kaggle apenas se o CSV não existir.
+cachedDataset = Path.home() / '.cache/kagglehub/datasets/juniorbueno/pix-banking-transaction/versions/1'
+datasetDir = str(cachedDataset) if (cachedDataset / 'comprovantes_pix_10000_anomalias.csv').exists() else kagglehub.dataset_download("juniorbueno/pix-banking-transaction")
 
 # %%
 dataDf = pd.read_csv(f"{datasetDir}/comprovantes_pix_10000_anomalias.csv", sep=";")
@@ -89,6 +97,7 @@ dataDf['Mesmo_Banco'] = (
 
 contagem = dataDf[dataDf['Anomalia'] == 1]['Mesmo_Banco'].value_counts()
 
+contagem = contagem.reindex([0, 1], fill_value=0)
 contagem.index = ['Bancos diferentes', 'Mesmo banco']
 
 contagem.plot(
@@ -232,13 +241,7 @@ rawPipeline = ImbPipeline([
     ("classifier", classifier)
 ])
 
-results = cross_validate(
-    rawPipeline,
-    XTrain,
-    yTrain,
-    scoring=scoring,
-    cv=5
-)
+# As três famílias são avaliadas juntas ao final do notebook.
 
 # %%
 
@@ -264,13 +267,6 @@ overPipeline = ImbPipeline([
 
 overTuned = TunedThresholdClassifierCV(overPipeline, scoring="f1", cv=5)
 
-overResults = cross_validate(
-    overTuned,
-    XTrain,
-    yTrain,
-    scoring=scoring,
-    cv=5
-)
 
 # %%
 underClassifier = xgb.XGBClassifier(
@@ -291,13 +287,6 @@ underPipeline = ImbPipeline([
 
 underTuned = TunedThresholdClassifierCV(underPipeline, scoring="f1", cv=5)
 
-underResults = cross_validate(
-    underTuned,
-    XTrain,
-    yTrain,
-    scoring=scoring,
-    cv=5
-)
 
 # %%
 mixClassifier = xgb.XGBClassifier(
@@ -322,20 +311,88 @@ mixPipeline = ImbPipeline([
 
 mixTuned = TunedThresholdClassifierCV(mixPipeline, scoring="f1", cv=5)
 
-mixResults = cross_validate(
-    mixTuned,
-    XTrain,
-    yTrain,
-    scoring=scoring,
-    cv=5
-)
 
 # %%
-overTuned.fit(XTrain, yTrain)
+# Regressão Logística usa escala padronizada antes da reamostragem.
+# Todos os transformadores e samplers são ajustados dentro de cada fold.
+modelPipelines = {
+    'XGBoost | Baseline': rawPipeline,
+    'XGBoost | SMOTE': overPipeline,
+    'XGBoost | Under-sampling': underPipeline,
+    'XGBoost | SMOTE + Tomek': mixPipeline,
+}
+samplers = {
+    'Baseline': None,
+    'SMOTE': SMOTE(random_state=42),
+    'Under-sampling': RandomUnderSampler(sampling_strategy=0.1, random_state=42),
+    'SMOTE + Tomek': SMOTETomek(random_state=42),
+}
+for family in ('Random Forest', 'Regressão Logística'):
+    for balancing, sampler in samplers.items():
+        weight = 'balanced' if sampler is None else None
+        estimator = (RandomForestClassifier(n_estimators=100, max_depth=12,
+                     class_weight=weight, random_state=42, n_jobs=-1)
+                     if family == 'Random Forest' else
+                     LogisticRegression(C=1.0, max_iter=3000, class_weight=weight,
+                                        random_state=42))
+        steps = [('preprocessor', clone(preprocessor))]
+        if family == 'Regressão Logística':
+            steps.append(('scaler', StandardScaler()))
+        if sampler is not None:
+            steps.append(('sampler', clone(sampler)))
+        steps.append(('classifier', estimator))
+        modelPipelines[f'{family} | {balancing}'] = ImbPipeline(steps)
 
-# Probabilidades da classe fraude no conjunto de teste
-y_scores = overTuned.predict_proba(XTest)[:, 1]
+# %%
+def default_f1(estimator, X, y):
+    return f1_score(y, estimator.predict_proba(X)[:, 1] >= 0.5, zero_division=0)
 
+
+comparisonScoring = {**scoring, 'PR_AUC': 'average_precision', 'ROC_AUC': 'roc_auc',
+                     'F1_Tunado': 'f1', 'F1_Padrao': default_f1}
+comparisonRows, testRows = [], []
+fittedModels, testPredictions = {}, {}
+for label, pipeline in modelPipelines.items():
+    family, balancing = label.split(' | ')
+    print(f'Avaliando {label}', flush=True)
+    tuned = TunedThresholdClassifierCV(clone(pipeline), scoring='f1', cv=5)
+    cvResults = cross_validate(tuned, XTrain, yTrain, scoring=comparisonScoring,
+                               cv=5, error_score='raise')
+    for fold in range(5):
+        comparisonRows.append({'Modelo': family, 'Balanceamento': balancing,
+                               'Variante': label, 'Fold': fold + 1,
+                               **{key: float(cvResults['test_' + key][fold])
+                                  for key in comparisonScoring}})
+    tuned.fit(XTrain, yTrain)
+    fittedModels[label] = tuned
+    prob, pred = tuned.predict_proba(XTest)[:, 1], tuned.predict(XTest)
+    testPredictions[label] = (prob, pred)
+    testRows.append({'Modelo': family, 'Balanceamento': balancing, 'Variante': label,
+                     'Limiar': float(tuned.best_threshold_),
+                     'PR_AUC': average_precision_score(yTest, prob),
+                     'ROC_AUC': roc_auc_score(yTest, prob),
+                     'F1': f1_score(yTest, pred, zero_division=0),
+                     'Precision': precision_score(yTest, pred, zero_division=0),
+                     'Recall': recall_score(yTest, pred, zero_division=0)})
+
+comparisonResults = pd.DataFrame(comparisonRows)
+testResults = pd.DataFrame(testRows)
+# Escolha por F1 médio na validação externa, sem usar o teste.
+cvMeans = comparisonResults.groupby('Variante')['F1_Tunado'].mean()
+selectedVariants = {family: cvMeans[[label for label in modelPipelines
+                    if label.startswith(family + ' | ')]].idxmax()
+                    for family in ('XGBoost', 'Random Forest', 'Regressão Logística')}
+bestVariant = cvMeans.idxmax()
+outputDir = Path(__file__).resolve().parents[2] / 'resultados/10k'
+outputDir.mkdir(parents=True, exist_ok=True)
+comparisonResults.to_csv(outputDir / 'metricas_validacao_cruzada.csv', index=False)
+testResults.to_csv(outputDir / 'metricas_teste.csv', index=False)
+print('\nResultados no teste de 2.000 transações:')
+print(testResults.to_string(index=False))
+print(f'Escolha pela validação cruzada: {bestVariant}')
+
+# Compatibilidade com as células originais do XGBoost.
+overTuned = fittedModels['XGBoost | SMOTE']
+y_scores = testPredictions['XGBoost | SMOTE'][0]
 pr_auc = average_precision_score(yTest, y_scores)
-print(f"PR-AUC (Average Precision): {pr_auc:.4f}")
-print(f"Baseline (aleatório): {yTest.mean():.4f}")
+print(f'PR-AUC XGBoost SMOTE: {pr_auc:.4f}')
