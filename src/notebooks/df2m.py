@@ -98,6 +98,26 @@ for container in ax.containers:
 plt.tight_layout()
 plt.show()
 
+# %%
+class_counts = dataDf['fraude'].value_counts()
+legitTransactionColor = '#2ca02c'
+fraudTransactionColor = '#d62728'
+ax = class_counts.plot(
+    kind='bar', 
+    color=[legitTransactionColor, fraudTransactionColor], # Verde para normal, Vermelho para fraude
+    figsize=(8, 5)
+)
+
+plt.title('Distribuição do Target: ', fontsize=14, pad=15)
+plt.xlabel('Classe (0 = Legítima, 1 = Fraude)', fontweight='bold')
+plt.ylabel('Volume de Transações', fontweight='bold')
+plt.xticks(rotation=0)
+
+for container in ax.containers:
+    ax.bar_label(container, fmt='%d', padding=3, fontweight='bold')
+
+plt.tight_layout()
+plt.show()
 
 # %%
 columnsToDrop = [

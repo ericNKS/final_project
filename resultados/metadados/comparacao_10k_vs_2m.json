@@ -1,0 +1,27 @@
+{
+  "dataset_10k": {
+    "total_transacoes": 10000,
+    "transacoes_teste": 2000,
+    "anomalias_teste": 20,
+    "prevalencia_anomalias": 0.01,
+    "custo_percentual_por_erro_recall": 5.0,
+    "natureza": "Anomalias sintéticas cadastrais e cadastros inconsistentes"
+  },
+  "dataset_2m": {
+    "total_transacoes": 2000000,
+    "transacoes_teste": 400000,
+    "fraudes_teste": 3075,
+    "prevalencia_fraudes": 0.0076875,
+    "custo_percentual_por_erro_recall": 0.03252032520325203,
+    "volume_fraudes_total_brl": 4405302309.06,
+    "volume_interceptado_xgboost_brl": 3937764371.87,
+    "pct_interceptado_xgboost": 89.39,
+    "natureza": "Fraudes comportamentais reais em larga escala com esvaziamento de conta"
+  },
+  "conclusoes_principais": [
+    "Resolução Estatística: 1 erro no 10k custa 5.0% de Recall (função degrau), enquanto no 2M custa apenas 0.0325% (curva estocástica contínua).",
+    "Métricas Absolutas: O dataset 10k apresenta F1 inflado (>95%) devido à separabilidade cadastral artificial; o dataset 2M atinge F1 de 81% em fraudes comportamentais complexas com desbalanceamento de 0.77%, o que representa estado da arte em ambiente de produção.",
+    "Estratégia de Balanceamento: Em dados pequenos (10k), SMOTE e Under-sampling trazem saltos expressivos; em Big Data (2M), a calibração de limiar e perda ponderada (scale_pos_weight) superam reamostragens artificiais sem penalizar o tempo de treino.",
+    "Impacto Financeiro: O modelo final em 2M protege R$ 3,94 Bilhões com perda residual contida em 10.6% e volume controlado de falsos alarmes."
+  ]
+}

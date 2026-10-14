@@ -1,0 +1,4 @@
+modelo,10k_variante,10k_f1,10k_precision,10k_recall,10k_pr_auc,10k_roc_auc,2m_variante,2m_f1,2m_precision,2m_recall,2m_pr_auc,2m_roc_auc,diferenca_f1_pts
+XGBoost,XGBoost | SMOTE,0.95,0.95,0.95,0.9454464557347124,0.9567676767676768,XGBoost (Sem Reamostragem),0.8102,0.8434,0.7795,0.891,0.99796,-13.979999999999993
+Random Forest,Random Forest | Baseline,0.95,0.95,0.95,0.950520020800832,0.9519444444444444,Random Forest (Sem Reamostragem),0.7852,0.8521,0.7281,0.8462,0.99612,-16.479999999999993
+Regressão Logística,Regressão Logística | Under-sampling,0.5714285714285714,1.0,0.4,0.511916749947046,0.8940151515151515,Regressão Logística (Under-sampling),0.7261,0.6882,0.7684,0.761,0.98621,15.467142857142857

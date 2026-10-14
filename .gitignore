@@ -24,3 +24,5 @@ Thumbs.db
 
 # Data
 data/archive/*.csv
+
+logs/

@@ -12,6 +12,7 @@ import seaborn as sns
 from sklearn.metrics import (f1_score,
                             precision_score, recall_score, confusion_matrix,
                             ConfusionMatrixDisplay, roc_curve, precision_recall_curve)
+from src.utils.logger import logger
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "src/notebooks/graficos/10k"
@@ -22,16 +23,16 @@ def save(number, name):
     plt.tight_layout()
     plt.savefig(OUT / f"{number:02d}_{name}.png", dpi=150, bbox_inches="tight")
     plt.close()
-    print(f"Salvo: {number:02d}_{name}.png", flush=True)
+    logger.info(f"Salvo (10k): {OUT / f'{number:02d}_{name}.png'}")
 
 
-def main():
+def generate_10k_plots(use_saved=True):
     # Usa a cadeia de confiança do sistema sem desativar a validação TLS.
     import truststore
     truststore.inject_into_ssl()
     OUT.mkdir(parents=True, exist_ok=True)
     TABLES.mkdir(parents=True, exist_ok=True)
-    if "--saved" in sys.argv:
+    if use_saved and (TABLES / "predicoes_teste.csv").exists() and (TABLES / "metricas_teste.csv").exists():
         metadata = json.loads((TABLES / "metadados.json").read_text(encoding="utf-8"))
         saved = pd.read_csv(TABLES / "predicoes_teste.csv")
         test = pd.read_csv(TABLES / "metricas_teste.csv")
@@ -189,8 +190,20 @@ def main():
             overview.paste(thumbnail, (x, top + 25))
         draw.text((x + 5, top + 5), path.name, fill="black")
     overview.save(TABLES / "visao_geral.png")
-    print(mt.to_string(index=False))
+    logger.info(f"Visão geral salva: {TABLES / 'visao_geral.png'}")
+    logger.info("\n" + mt.to_string(index=False))
+    return {
+        "df_cv": df,
+        "df_test": mt,
+        "selected": selected,
+        "financial": money,
+        "predictions": predictions,
+        "yTest": yt,
+        "XTest": Xt,
+        "best": best
+    }
 
 
 if __name__ == "__main__":
-    main()
+    use_saved = "--saved" in sys.argv or "--no-saved" not in sys.argv
+    generate_10k_plots(use_saved=use_saved)

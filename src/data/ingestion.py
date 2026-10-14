@@ -126,8 +126,8 @@ def saveModelArtifact(model, metadata: dict, filepath: str = "resultados/modelos
     joblib.dump(model, path)
     meta_path = path.with_suffix(".json")
     meta_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"\nModelo salvo com sucesso em: {path}")
-    print(f"Metadados salvos em: {meta_path}")
+    logger.info(f"Modelo salvo com sucesso em: {path}")
+    logger.info(f"Metadados salvos em: {meta_path}")
 
 
 def printTrainResult(modelNames, *results):
@@ -155,7 +155,7 @@ def printTrainResult(modelNames, *results):
         ]
     })
 
-    print(modelResults)
+    logger.info("Resultados de Treinamento:\n%s", modelResults)
 
 
 def printTestResult(modelNames, *results):
@@ -188,4 +188,4 @@ def printTestResult(modelNames, *results):
         ]
     })
 
-    print(modelResults)
+    logger.info("Resultados no Conjunto de Teste:\n%s", modelResults)

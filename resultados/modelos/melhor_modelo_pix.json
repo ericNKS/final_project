@@ -1,20 +1,20 @@
 {
-  "modelo": "XGBoost (Baseline)",
-  "limiar_otimizado": 0.6264405846595764,
+  "modelo": "XGBoost (Sem Reamostragem)",
+  "limiar_otimizado": 0.7068875432014465,
   "metricas_teste_400k": {
-    "accuracy": 0.9970025,
-    "precision": 0.8105960264900662,
-    "recall": 0.7960975609756098,
-    "f1": 0.8032813781788352,
-    "roc_auc": 0.9975983228794938,
-    "pr_auc": 0.8841303058732671
+    "accuracy": 0.9971925,
+    "precision": 0.8434201266713582,
+    "recall": 0.7795121951219512,
+    "f1": 0.8102078756126415,
+    "roc_auc": 0.9979620507447753,
+    "pr_auc": 0.8910027479759363
   },
   "impacto_financeiro_teste_400k": {
     "volume_total_fraudes_brl": 4405302309.059999,
-    "volume_fraudes_interceptadas_brl": 3955017221.1400003,
-    "volume_fraudes_nao_detectadas_brl": 450285087.91999996,
-    "volume_falsos_positivos_brl": 452574394.53,
-    "pct_financeiro_salvo": 89.77856554829535
+    "volume_fraudes_interceptadas_brl": 3937764371.87,
+    "volume_fraudes_nao_detectadas_brl": 467537937.19,
+    "volume_falsos_positivos_brl": 311975391.79999995,
+    "pct_financeiro_salvo": 89.38692728922473
   },
   "particoes": {
     "treino_80_2m": 1600000,
@@ -39,5 +39,5 @@
     "media_valor_pagador",
     "mediana_valor_pagador"
   ],
-  "data_treinamento": "2026-10-13T20:59:11.280469"
+  "data_treinamento": "2026-10-14T18:02:50.374522"
 }
