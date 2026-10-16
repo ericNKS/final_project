@@ -36,10 +36,11 @@ não fazem fallback de treinamento para CPU. Os artefatos com cuML devem
 ser carregados no ambiente GPU compatível, com `cuml.accel` instalado antes
 dos imports de scikit-learn.
 
-Teste de integração das 24 configurações, incluindo calibração e serialização:
+Teste de integração das 24 configurações, incluindo calibração e serialização.
+Execute no PowerShell, na pasta raiz do projeto; o WSL usa essa pasta como diretório de trabalho:
 
 ```powershell
-wsl -d Ubuntu-24.04 -u root --cd /mnt/c/Users/Davi/Documents/GitHub/final_project -- /opt/final-project-gpu/bin/python -m unittest discover -s tests -p test_gpu_runtime.py
+wsl -d Ubuntu-24.04 -u root -- /opt/final-project-gpu/bin/python -m unittest discover -s tests -p test_gpu_runtime.py
 ```
 
 Referências: [instalação RAPIDS](https://docs.rapids.ai/install/),
