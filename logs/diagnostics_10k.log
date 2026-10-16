@@ -1,0 +1,21 @@
+Salvo: 01_comparacao_por_modelo.png
+Salvo: 02_impacto_por_tunagem.png
+Salvo: 03_tunagem_por_balanceamento.png
+Salvo: 04_matrizes_confusao_teste_10k.png
+Salvo: 05_curvas_roc_teste_10k.png
+Salvo: 06_curvas_precision_recall_teste_10k.png
+Salvo: 08_distribuicao_probabilidades_teste_10k.png
+Salvo: 09_impacto_financeiro_teste_10k.png
+             Modelo  Balanceamento                             Variante   Limiar   PR_AUC  ROC_AUC       F1  Precision  Recall
+            XGBoost       Baseline                   XGBoost | Baseline 0.236640 0.930055 0.960568 0.900000   0.900000    0.90
+            XGBoost          SMOTE                      XGBoost | SMOTE 0.393726 0.948063 0.955631 0.950000   0.950000    0.95
+            XGBoost Under-sampling             XGBoost | Under-sampling 0.549031 0.942596 0.950505 0.950000   0.950000    0.95
+            XGBoost  SMOTE + Tomek              XGBoost | SMOTE + Tomek 0.218911 0.945405 0.953359 0.894737   0.944444    0.85
+      Random Forest       Baseline             Random Forest | Baseline 0.375245 0.874519 0.956086 0.818182   0.750000    0.90
+      Random Forest          SMOTE                Random Forest | SMOTE 0.416778 0.950752 0.966919 0.974359   1.000000    0.95
+      Random Forest Under-sampling       Random Forest | Under-sampling 0.445708 0.950510 0.951010 0.974359   1.000000    0.95
+      Random Forest  SMOTE + Tomek        Random Forest | SMOTE + Tomek 0.278867 0.950692 0.964015 0.974359   1.000000    0.95
+Regress�o Log�stica       Baseline       Regress�o Log�stica | Baseline 0.989899 0.460881 0.869116 0.571429   1.000000    0.40
+Regress�o Log�stica          SMOTE          Regress�o Log�stica | SMOTE 0.979798 0.480815 0.879848 0.571429   1.000000    0.40
+Regress�o Log�stica Under-sampling Regress�o Log�stica | Under-sampling 0.727280 0.512101 0.894192 0.571429   1.000000    0.40
+Regress�o Log�stica  SMOTE + Tomek  Regress�o Log�stica | SMOTE + Tomek 0.979798 0.480815 0.879848 0.571429   1.000000    0.40

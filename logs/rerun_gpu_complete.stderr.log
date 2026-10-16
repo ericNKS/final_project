@@ -1,0 +1,32 @@
+/opt/final-project-gpu/lib/python3.12/site-packages/xgboost/core.py:569: UserWarning: [23:07:20] WARNING: /__w/xgboost/xgboost/src/common/error_msg.cc:62: Falling back to prediction using DMatrix due to mismatched devices. This might lead to higher memory usage and slower performance. XGBoost is running on: cuda:0, while the input data is on: cpu.
+Potential solutions:
+- Use a data structure that matches the device ordinal in the booster.
+- Set the device for booster before call to inplace_predict.
+
+This warning will only be shown once.
+
+  return func(**kwargs)
+Traceback (most recent call last):
+  File "/mnt/c/Users/Davi/Documents/GitHub/final_project/main.py", line 765, in <module>
+    plt.savefig("src/notebooks/graficos/09_impacto_financeiro_teste_2m.png", dpi=150, bbox_inches="tight")
+  File "/opt/final-project-gpu/lib/python3.12/site-packages/matplotlib/pyplot.py", line 1346, in savefig
+    res = fig.savefig(fname, **kwargs)  # type: ignore[func-returns-value]
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/final-project-gpu/lib/python3.12/site-packages/matplotlib/figure.py", line 3515, in savefig
+    self.canvas.print_figure(fname, **kwargs)
+  File "/opt/final-project-gpu/lib/python3.12/site-packages/matplotlib/backend_bases.py", line 2289, in print_figure
+    result = print_method(
+             ^^^^^^^^^^^^^
+  File "/opt/final-project-gpu/lib/python3.12/site-packages/matplotlib/backend_bases.py", line 2146, in <lambda>
+    print_method = functools.wraps(meth)(lambda *args, **kwargs: meth(
+                                                                 ^^^^^
+  File "/opt/final-project-gpu/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py", line 537, in print_png
+    self._print_pil(filename_or_obj, "png", pil_kwargs, metadata)
+  File "/opt/final-project-gpu/lib/python3.12/site-packages/matplotlib/backends/backend_agg.py", line 486, in _print_pil
+    mpl.image.imsave(
+  File "/opt/final-project-gpu/lib/python3.12/site-packages/matplotlib/image.py", line 1729, in imsave
+    image.save(fname, **pil_kwargs)
+  File "/opt/final-project-gpu/lib/python3.12/site-packages/PIL/Image.py", line 2706, in save
+    fp = builtins.open(filename, "w+b")
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: [Errno 22] Invalid argument: 'src/notebooks/graficos/09_impacto_financeiro_teste_2m.png'

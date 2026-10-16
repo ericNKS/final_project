@@ -1,0 +1,368 @@
+[cuml.accel] Accelerator installed.
+2026-10-15 23:03:41,458 - main - INFO - Backend de treinamento: gpu
+2026-10-15 23:03:41,459 - main - INFO - Dispositivo solicitado para XGBoost: cuda
+2026-10-15 23:03:41,655 - main - INFO - CUDA confirmado pelo XGBoost: cuda:0
+2026-10-15 23:03:41,656 - main - INFO - ================================================================================
+2026-10-15 23:03:41,657 - main - INFO - ETAPA 1: CARREGAMENTO E DIVISÃO DO DATASET DE 2M PIX
+2026-10-15 23:03:41,657 - main - INFO - ================================================================================
+2026-10-15 23:03:41,658 - src.data.ingestion - INFO - Carregando dataset de 2M transações do Hugging Face...
+2026-10-15 23:03:42,260 - httpx2 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/andremessina/pix-fraud-br "HTTP/1.1 200 OK"
+2026-10-15 23:03:42,462 - httpx2 - INFO - HTTP Request: GET https://huggingface.co/api/datasets/andremessina/pix-fraud-br/tree/main/data?recursive=false&expand=false "HTTP/1.1 200 OK"
+2026-10-15 23:03:42,666 - httpx2 - INFO - HTTP Request: GET https://huggingface.co/datasets/andremessina/pix-fraud-br/resolve/main/data/train-00000-of-00001.parquet "HTTP/1.1 302 Found"
+2026-10-15 23:03:43,226 - httpx2 - INFO - HTTP Request: GET https://us.aws.cdn.hf.co/xet-bridge-us/69f119f6b43dab0b7f1bf1aa/bd0f1a0fd35b50d9710d2ffc9388b5109357d789303fb2ec795cffffeb87bd1d?X-Xet-Cas-Uid=public&xip=lMfRe3ffav0&response-content-disposition=inline%3B+filename*%3DUTF-8%27%27train-00000-of-00001.parquet%3B+filename%3D%22train-00000-of-00001.parquet%22%3B&user_id=public&Expires=1792119822&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5hd3MuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNjlmMTE5ZjZiNDNkYWIwYjdmMWJmMWFhL2JkMGYxYTBmZDM1YjUwZDk3MTBkMmZmYzkzODhiNTEwOTM1N2Q3ODkzMDNmYjJlYzc5NWNmZmZmZWI4N2JkMWRcXD9YLVhldC1DYXMtVWlkPXB1YmxpYyZ4aXA9bE1mUmUzZmZhdjAmcmVzcG9uc2UtY29udGVudC1kaXNwb3NpdGlvbj1pbmxpbmUlM0IrZmlsZW5hbWUlMkElM0RVVEYtOCUyNyUyN3RyYWluLTAwMDAwLW9mLTAwMDAxLnBhcnF1ZXQlM0IrZmlsZW5hbWUlM0QlMjJ0cmFpbi0wMDAwMC1vZi0wMDAwMS5wYXJxdWV0JTIyJTNCJnVzZXJfaWQ9cHVibGljIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJFcG9jaFRpbWUiOjE3OTIxMTk4MjJ9fX1dfQ__&Signature=MEUCIQCnlTuciySN7RpykV8zyvBnnp5dB2UIWUDC3f9lNe3ApwIgLswrT9QKgclI-azNnUJiZug4e2iaW0UfHVfmfHSsbYc_&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256 "HTTP/1.1 206 Partial Content"
+2026-10-15 23:03:43,711 - httpx2 - INFO - HTTP Request: GET https://huggingface.co/datasets/andremessina/pix-fraud-br/resolve/main/data/train-00000-of-00001.parquet "HTTP/1.1 302 Found"
+2026-10-15 23:03:44,158 - httpx2 - INFO - HTTP Request: GET https://us.aws.cdn.hf.co/xet-bridge-us/69f119f6b43dab0b7f1bf1aa/bd0f1a0fd35b50d9710d2ffc9388b5109357d789303fb2ec795cffffeb87bd1d?user_id=public&X-Xet-Cas-Uid=public&response-content-disposition=inline%3B+filename*%3DUTF-8%27%27train-00000-of-00001.parquet%3B+filename%3D%22train-00000-of-00001.parquet%22%3B&xip=lMfRe3ffav0&Expires=1792119823&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5hd3MuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNjlmMTE5ZjZiNDNkYWIwYjdmMWJmMWFhL2JkMGYxYTBmZDM1YjUwZDk3MTBkMmZmYzkzODhiNTEwOTM1N2Q3ODkzMDNmYjJlYzc5NWNmZmZmZWI4N2JkMWRcXD91c2VyX2lkPXB1YmxpYyZYLVhldC1DYXMtVWlkPXB1YmxpYyZyZXNwb25zZS1jb250ZW50LWRpc3Bvc2l0aW9uPWlubGluZSUzQitmaWxlbmFtZSUyQSUzRFVURi04JTI3JTI3dHJhaW4tMDAwMDAtb2YtMDAwMDEucGFycXVldCUzQitmaWxlbmFtZSUzRCUyMnRyYWluLTAwMDAwLW9mLTAwMDAxLnBhcnF1ZXQlMjIlM0ImeGlwPWxNZlJlM2ZmYXYwIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJFcG9jaFRpbWUiOjE3OTIxMTk4MjN9fX1dfQ__&Signature=MEQCIF7QyVscXuYFOXWnHtnAc5Aq%7EttKkhRBuMvCkYZb0Uz2AiBAkrajDRCwt6fKYZ67FMvdnZs0CQCaMeqJ0hQs7i2bLw__&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256 "HTTP/1.1 206 Partial Content"
+2026-10-15 23:03:45,607 - httpx2 - INFO - HTTP Request: GET https://huggingface.co/datasets/andremessina/pix-fraud-br/resolve/main/data/train-00000-of-00001.parquet "HTTP/1.1 302 Found"
+2026-10-15 23:03:46,148 - httpx2 - INFO - HTTP Request: GET https://us.aws.cdn.hf.co/xet-bridge-us/69f119f6b43dab0b7f1bf1aa/bd0f1a0fd35b50d9710d2ffc9388b5109357d789303fb2ec795cffffeb87bd1d?X-Xet-Cas-Uid=public&xip=lMfRe3ffav0&response-content-disposition=inline%3B+filename*%3DUTF-8%27%27train-00000-of-00001.parquet%3B+filename%3D%22train-00000-of-00001.parquet%22%3B&user_id=public&Expires=1792119825&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5hd3MuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNjlmMTE5ZjZiNDNkYWIwYjdmMWJmMWFhL2JkMGYxYTBmZDM1YjUwZDk3MTBkMmZmYzkzODhiNTEwOTM1N2Q3ODkzMDNmYjJlYzc5NWNmZmZmZWI4N2JkMWRcXD9YLVhldC1DYXMtVWlkPXB1YmxpYyZ4aXA9bE1mUmUzZmZhdjAmcmVzcG9uc2UtY29udGVudC1kaXNwb3NpdGlvbj1pbmxpbmUlM0IrZmlsZW5hbWUlMkElM0RVVEYtOCUyNyUyN3RyYWluLTAwMDAwLW9mLTAwMDAxLnBhcnF1ZXQlM0IrZmlsZW5hbWUlM0QlMjJ0cmFpbi0wMDAwMC1vZi0wMDAwMS5wYXJxdWV0JTIyJTNCJnVzZXJfaWQ9cHVibGljIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJFcG9jaFRpbWUiOjE3OTIxMTk4MjV9fX1dfQ__&Signature=MEUCIAdXPIvyFeHzg8-6xlgev55y3bjv-ScMntabXah-t0pYAiEAsfivQp5%7EswQxb5r8vVCH-6uNiBlQhNW5tCPadBGSDDY_&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256 "HTTP/1.1 206 Partial Content"
+2026-10-15 23:03:46,928 - httpx2 - INFO - HTTP Request: GET https://huggingface.co/datasets/andremessina/pix-fraud-br/resolve/main/data/train-00000-of-00001.parquet "HTTP/1.1 302 Found"
+2026-10-15 23:03:47,407 - httpx2 - INFO - HTTP Request: GET https://us.aws.cdn.hf.co/xet-bridge-us/69f119f6b43dab0b7f1bf1aa/bd0f1a0fd35b50d9710d2ffc9388b5109357d789303fb2ec795cffffeb87bd1d?xip=lMfRe3ffav0&X-Xet-Cas-Uid=public&response-content-disposition=inline%3B+filename*%3DUTF-8%27%27train-00000-of-00001.parquet%3B+filename%3D%22train-00000-of-00001.parquet%22%3B&user_id=public&Expires=1792119826&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5hd3MuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNjlmMTE5ZjZiNDNkYWIwYjdmMWJmMWFhL2JkMGYxYTBmZDM1YjUwZDk3MTBkMmZmYzkzODhiNTEwOTM1N2Q3ODkzMDNmYjJlYzc5NWNmZmZmZWI4N2JkMWRcXD94aXA9bE1mUmUzZmZhdjAmWC1YZXQtQ2FzLVVpZD1wdWJsaWMmcmVzcG9uc2UtY29udGVudC1kaXNwb3NpdGlvbj1pbmxpbmUlM0IrZmlsZW5hbWUlMkElM0RVVEYtOCUyNyUyN3RyYWluLTAwMDAwLW9mLTAwMDAxLnBhcnF1ZXQlM0IrZmlsZW5hbWUlM0QlMjJ0cmFpbi0wMDAwMC1vZi0wMDAwMS5wYXJxdWV0JTIyJTNCJnVzZXJfaWQ9cHVibGljIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJFcG9jaFRpbWUiOjE3OTIxMTk4MjZ9fX1dfQ__&Signature=MEYCIQDW2bqO-XARMAbG2toouuR6VxGEngSHzIgJQFtkHIp2PgIhAPdzxV8qkcuStxCrL3jVPX3wqgHYXcZ9KNEKJYmD-C5z&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256 "HTTP/1.1 206 Partial Content"
+2026-10-15 23:03:48,304 - httpx2 - INFO - HTTP Request: GET https://huggingface.co/datasets/andremessina/pix-fraud-br/resolve/main/data/train-00000-of-00001.parquet "HTTP/1.1 302 Found"
+2026-10-15 23:03:48,576 - httpx2 - INFO - HTTP Request: GET https://us.aws.cdn.hf.co/xet-bridge-us/69f119f6b43dab0b7f1bf1aa/bd0f1a0fd35b50d9710d2ffc9388b5109357d789303fb2ec795cffffeb87bd1d?xip=lMfRe3ffav0&X-Xet-Cas-Uid=public&response-content-disposition=inline%3B+filename*%3DUTF-8%27%27train-00000-of-00001.parquet%3B+filename%3D%22train-00000-of-00001.parquet%22%3B&user_id=public&Expires=1792119828&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5hd3MuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNjlmMTE5ZjZiNDNkYWIwYjdmMWJmMWFhL2JkMGYxYTBmZDM1YjUwZDk3MTBkMmZmYzkzODhiNTEwOTM1N2Q3ODkzMDNmYjJlYzc5NWNmZmZmZWI4N2JkMWRcXD94aXA9bE1mUmUzZmZhdjAmWC1YZXQtQ2FzLVVpZD1wdWJsaWMmcmVzcG9uc2UtY29udGVudC1kaXNwb3NpdGlvbj1pbmxpbmUlM0IrZmlsZW5hbWUlMkElM0RVVEYtOCUyNyUyN3RyYWluLTAwMDAwLW9mLTAwMDAxLnBhcnF1ZXQlM0IrZmlsZW5hbWUlM0QlMjJ0cmFpbi0wMDAwMC1vZi0wMDAwMS5wYXJxdWV0JTIyJTNCJnVzZXJfaWQ9cHVibGljIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJFcG9jaFRpbWUiOjE3OTIxMTk4Mjh9fX1dfQ__&Signature=MEUCIQCOur00OJRBt1a9eKY-p3EKfPxuL67h0r0kPOeYhJxiGQIgDoiy8ygub5D0TOCBNXpsvbr9IJoz2ubXOziSTLnT2MI_&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256 "HTTP/1.1 206 Partial Content"
+2026-10-15 23:03:48,841 - httpx2 - INFO - HTTP Request: GET https://huggingface.co/datasets/andremessina/pix-fraud-br/resolve/main/data/train-00000-of-00001.parquet "HTTP/1.1 302 Found"
+2026-10-15 23:03:49,306 - httpx2 - INFO - HTTP Request: GET https://us.aws.cdn.hf.co/xet-bridge-us/69f119f6b43dab0b7f1bf1aa/bd0f1a0fd35b50d9710d2ffc9388b5109357d789303fb2ec795cffffeb87bd1d?response-content-disposition=inline%3B+filename*%3DUTF-8%27%27train-00000-of-00001.parquet%3B+filename%3D%22train-00000-of-00001.parquet%22%3B&xip=lMfRe3ffav0&X-Xet-Cas-Uid=public&user_id=public&Expires=1792119828&Policy=eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly91cy5hd3MuY2RuLmhmLmNvL3hldC1icmlkZ2UtdXMvNjlmMTE5ZjZiNDNkYWIwYjdmMWJmMWFhL2JkMGYxYTBmZDM1YjUwZDk3MTBkMmZmYzkzODhiNTEwOTM1N2Q3ODkzMDNmYjJlYzc5NWNmZmZmZWI4N2JkMWRcXD9yZXNwb25zZS1jb250ZW50LWRpc3Bvc2l0aW9uPWlubGluZSUzQitmaWxlbmFtZSUyQSUzRFVURi04JTI3JTI3dHJhaW4tMDAwMDAtb2YtMDAwMDEucGFycXVldCUzQitmaWxlbmFtZSUzRCUyMnRyYWluLTAwMDAwLW9mLTAwMDAxLnBhcnF1ZXQlMjIlM0ImeGlwPWxNZlJlM2ZmYXYwJlgtWGV0LUNhcy1VaWQ9cHVibGljJnVzZXJfaWQ9cHVibGljIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJFcG9jaFRpbWUiOjE3OTIxMTk4Mjh9fX1dfQ__&Signature=MEQCIAtzRtT40MZF2sdYakOpJ1lDSYlULTc3Ew2HLL0BAACwAiASsH9Yh9DZAoT8Gw-4AO6qgOIwxsoAxVQfkxrsytoASg__&Key-Pair-Id=01KXEF4KZ1B6FV465MAWR4M21F&Hash-Algorithm=SHA256 "HTTP/1.1 206 Partial Content"
+2026-10-15 23:03:50,049 - main - INFO - Dataset de 2M carregado em 8.39s | Linhas: 2,000,000
+2026-10-15 23:03:50,050 - src.data.cleaning - INFO - Preparando dataset de 2M transações...
+2026-10-15 23:03:56,421 - main - INFO - Dataset preparado | X shape: (2000000, 16) | Fraudes totais: 15,376 (0.77%)
+2026-10-15 23:03:57,341 - main - INFO - Treinamento (70%): (1400000, 16) | Fraudes: 10,763 (0.77%)
+2026-10-15 23:03:57,342 - main - INFO - Validação (10%): (200000, 16) | Fraudes: 1,538 (0.77%)
+2026-10-15 23:03:57,343 - main - INFO - Teste (20%): (400000, 16) | Fraudes: 3,075 (0.77%)
+2026-10-15 23:03:57,761 - main - INFO - Amostra de Tunagem: (80000, 16) (SubTreino: (60000, 16), SubVal: (20000, 16))
+2026-10-15 23:03:57,761 - main - INFO - ================================================================================
+2026-10-15 23:03:57,762 - main - INFO - ETAPA 2: EXPERIMENTOS DE TUNAGEM DE HIPERPARÂMETROS (AMOSTRA DE 80K)
+2026-10-15 23:03:57,762 - main - INFO - ================================================================================
+2026-10-15 23:03:57,771 - main - INFO - [01/24] Testando XGBoost | Sem Reamostragem | Sem Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:03:59,308 - main - INFO -       -> F1 Padrão: 74.1% | Limiar Otimizado: 0.5556 -> F1 Tunado: 74.4% (Ganho: +0.3%) | PR-AUC: 81.1%
+2026-10-15 23:03:59,308 - main - INFO - [02/24] Testando XGBoost | Sem Reamostragem | Com Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:00,091 - main - INFO -       -> F1 Padrão: 74.2% | Limiar Otimizado: 0.6562 -> F1 Tunado: 75.7% (Ganho: +1.5%) | PR-AUC: 82.6%
+2026-10-15 23:04:00,091 - main - INFO - [03/24] Testando XGBoost | Under-sampling | Sem Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:00,740 - main - INFO -       -> F1 Padrão: 61.9% | Limiar Otimizado: 0.9798 -> F1 Tunado: 73.9% (Ganho: +12.0%) | PR-AUC: 78.8%
+2026-10-15 23:04:00,740 - main - INFO - [04/24] Testando XGBoost | Under-sampling | Com Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:01,614 - main - INFO -       -> F1 Padrão: 63.8% | Limiar Otimizado: 0.9596 -> F1 Tunado: 75.0% (Ganho: +11.2%) | PR-AUC: 81.8%
+2026-10-15 23:04:01,615 - main - INFO - [05/24] Testando XGBoost | SMOTE | Sem Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:02,494 - main - INFO -       -> F1 Padrão: 75.8% | Limiar Otimizado: 0.4848 -> F1 Tunado: 75.8% (Ganho: +0.0%) | PR-AUC: 80.7%
+2026-10-15 23:04:02,495 - main - INFO - [06/24] Testando XGBoost | SMOTE | Com Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:07,017 - main - INFO -       -> F1 Padrão: 74.1% | Limiar Otimizado: 0.7576 -> F1 Tunado: 75.1% (Ganho: +1.0%) | PR-AUC: 80.8%
+2026-10-15 23:04:07,018 - main - INFO - [07/24] Testando XGBoost | SMOTETomek | Sem Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:08,297 - main - INFO -       -> F1 Padrão: 73.8% | Limiar Otimizado: 0.6667 -> F1 Tunado: 74.8% (Ganho: +1.0%) | PR-AUC: 81.4%
+2026-10-15 23:04:08,297 - main - INFO - [08/24] Testando XGBoost | SMOTETomek | Com Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:09,709 - main - INFO -       -> F1 Padrão: 70.3% | Limiar Otimizado: 0.7557 -> F1 Tunado: 73.8% (Ganho: +3.5%) | PR-AUC: 77.5%
+2026-10-15 23:04:09,709 - main - INFO - [09/24] Testando Random Forest | Sem Reamostragem | Sem Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+2026-10-15 23:04:09,785 - src.models.gpu - INFO - RandomForestClassifier.fit: cuML nativo na GPU | shape=(60000, 18)
+2026-10-15 23:04:12,306 - src.models.gpu - INFO - RandomForestClassifier.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:12,629 - main - INFO -       -> F1 Padrão: 76.2% | Limiar Otimizado: 0.4242 -> F1 Tunado: 77.5% (Ganho: +1.3%) | PR-AUC: 82.9%
+2026-10-15 23:04:12,630 - main - INFO - [10/24] Testando Random Forest | Sem Reamostragem | Com Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+2026-10-15 23:04:12,703 - src.models.gpu - INFO - RandomForestClassifier.fit: cuML nativo na GPU | shape=(60000, 18)
+2026-10-15 23:04:13,821 - src.models.gpu - INFO - RandomForestClassifier.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:14,181 - main - INFO -       -> F1 Padrão: 67.2% | Limiar Otimizado: 0.7980 -> F1 Tunado: 74.2% (Ganho: +7.0%) | PR-AUC: 79.1%
+2026-10-15 23:04:14,181 - main - INFO - [11/24] Testando Random Forest | Under-sampling | Sem Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+2026-10-15 23:04:14,253 - src.models.gpu - INFO - RandomForestClassifier.fit: cuML nativo na GPU | shape=(5071, 18)
+2026-10-15 23:04:16,243 - src.models.gpu - INFO - RandomForestClassifier.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:16,561 - main - INFO -       -> F1 Padrão: 64.4% | Limiar Otimizado: 0.8485 -> F1 Tunado: 73.6% (Ganho: +9.3%) | PR-AUC: 76.6%
+2026-10-15 23:04:16,561 - main - INFO - [12/24] Testando Random Forest | Under-sampling | Com Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+2026-10-15 23:04:16,628 - src.models.gpu - INFO - RandomForestClassifier.fit: cuML nativo na GPU | shape=(5071, 18)
+2026-10-15 23:04:17,911 - src.models.gpu - INFO - RandomForestClassifier.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:18,247 - main - INFO -       -> F1 Padrão: 65.4% | Limiar Otimizado: 0.8586 -> F1 Tunado: 74.2% (Ganho: +8.8%) | PR-AUC: 78.8%
+2026-10-15 23:04:18,248 - main - INFO - [13/24] Testando Random Forest | SMOTE | Sem Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+2026-10-15 23:04:18,334 - src.models.gpu - INFO - RandomForestClassifier.fit: cuML nativo na GPU | shape=(119078, 18)
+2026-10-15 23:04:22,156 - src.models.gpu - INFO - RandomForestClassifier.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:22,474 - main - INFO -       -> F1 Padrão: 71.7% | Limiar Otimizado: 0.6162 -> F1 Tunado: 73.4% (Ganho: +1.7%) | PR-AUC: 75.8%
+2026-10-15 23:04:22,475 - main - INFO - [14/24] Testando Random Forest | SMOTE | Com Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+2026-10-15 23:04:22,555 - src.models.gpu - INFO - RandomForestClassifier.fit: cuML nativo na GPU | shape=(119078, 18)
+2026-10-15 23:04:23,512 - src.models.gpu - INFO - RandomForestClassifier.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:23,849 - main - INFO -       -> F1 Padrão: 64.6% | Limiar Otimizado: 0.7656 -> F1 Tunado: 71.0% (Ganho: +6.4%) | PR-AUC: 75.4%
+2026-10-15 23:04:23,850 - main - INFO - [15/24] Testando Random Forest | SMOTETomek | Sem Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+2026-10-15 23:04:24,434 - src.models.gpu - INFO - RandomForestClassifier.fit: cuML nativo na GPU | shape=(118932, 18)
+2026-10-15 23:04:28,008 - src.models.gpu - INFO - RandomForestClassifier.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:28,336 - main - INFO -       -> F1 Padrão: 71.3% | Limiar Otimizado: 0.5960 -> F1 Tunado: 73.2% (Ganho: +1.9%) | PR-AUC: 77.0%
+2026-10-15 23:04:28,336 - main - INFO - [16/24] Testando Random Forest | SMOTETomek | Com Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+2026-10-15 23:04:28,961 - src.models.gpu - INFO - RandomForestClassifier.fit: cuML nativo na GPU | shape=(118932, 18)
+2026-10-15 23:04:30,046 - src.models.gpu - INFO - RandomForestClassifier.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:30,360 - main - INFO -       -> F1 Padrão: 67.0% | Limiar Otimizado: 0.7968 -> F1 Tunado: 71.1% (Ganho: +4.1%) | PR-AUC: 73.5%
+2026-10-15 23:04:30,361 - main - INFO - [17/24] Testando Regressão Logística | Sem Reamostragem | Sem Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `StandardScaler.fit_transform` ran on GPU
+2026-10-15 23:04:30,458 - src.models.gpu - INFO - LogisticRegression.fit: cuML nativo na GPU | shape=(60000, 18)
+2026-10-15 23:04:30,714 - src.models.gpu - INFO - LogisticRegression.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+2026-10-15 23:04:31,062 - main - INFO -       -> F1 Padrão: 53.4% | Limiar Otimizado: 0.2418 -> F1 Tunado: 71.2% (Ganho: +17.8%) | PR-AUC: 73.8%
+2026-10-15 23:04:31,063 - main - INFO - [18/24] Testando Regressão Logística | Sem Reamostragem | Com Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `StandardScaler.fit_transform` ran on GPU
+2026-10-15 23:04:31,141 - src.models.gpu - INFO - LogisticRegression.fit: cuML nativo na GPU | shape=(60000, 18)
+2026-10-15 23:04:31,233 - src.models.gpu - INFO - LogisticRegression.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+2026-10-15 23:04:31,571 - main - INFO -       -> F1 Padrão: 25.4% | Limiar Otimizado: 0.9495 -> F1 Tunado: 67.5% (Ganho: +42.1%) | PR-AUC: 70.5%
+2026-10-15 23:04:31,572 - main - INFO - [19/24] Testando Regressão Logística | Under-sampling | Sem Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `StandardScaler.fit_transform` ran on GPU
+2026-10-15 23:04:31,648 - src.models.gpu - INFO - LogisticRegression.fit: cuML nativo na GPU | shape=(5071, 18)
+2026-10-15 23:04:31,752 - src.models.gpu - INFO - LogisticRegression.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+2026-10-15 23:04:32,084 - main - INFO -       -> F1 Padrão: 49.9% | Limiar Otimizado: 0.6869 -> F1 Tunado: 64.1% (Ganho: +14.2%) | PR-AUC: 64.6%
+2026-10-15 23:04:32,085 - main - INFO - [20/24] Testando Regressão Logística | Under-sampling | Com Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `StandardScaler.fit_transform` ran on GPU
+2026-10-15 23:04:32,168 - src.models.gpu - INFO - LogisticRegression.fit: cuML nativo na GPU | shape=(5071, 18)
+2026-10-15 23:04:32,221 - src.models.gpu - INFO - LogisticRegression.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+2026-10-15 23:04:32,569 - main - INFO -       -> F1 Padrão: 42.5% | Limiar Otimizado: 0.6662 -> F1 Tunado: 52.3% (Ganho: +9.8%) | PR-AUC: 46.9%
+2026-10-15 23:04:32,569 - main - INFO - [21/24] Testando Regressão Logística | SMOTE | Sem Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `StandardScaler.fit_transform` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+2026-10-15 23:04:32,669 - src.models.gpu - INFO - LogisticRegression.fit: cuML nativo na GPU | shape=(119078, 18)
+2026-10-15 23:04:33,001 - src.models.gpu - INFO - LogisticRegression.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+2026-10-15 23:04:33,372 - main - INFO -       -> F1 Padrão: 38.4% | Limiar Otimizado: 0.9697 -> F1 Tunado: 72.4% (Ganho: +34.0%) | PR-AUC: 76.1%
+2026-10-15 23:04:33,373 - main - INFO - [22/24] Testando Regressão Logística | SMOTE | Com Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `StandardScaler.fit_transform` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+2026-10-15 23:04:33,480 - src.models.gpu - INFO - LogisticRegression.fit: cuML nativo na GPU | shape=(119078, 18)
+2026-10-15 23:04:33,791 - src.models.gpu - INFO - LogisticRegression.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+2026-10-15 23:04:34,149 - main - INFO -       -> F1 Padrão: 29.5% | Limiar Otimizado: 0.9596 -> F1 Tunado: 69.8% (Ganho: +40.3%) | PR-AUC: 72.8%
+2026-10-15 23:04:34,149 - main - INFO - [23/24] Testando Regressão Logística | SMOTETomek | Sem Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `StandardScaler.fit_transform` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+2026-10-15 23:04:34,935 - src.models.gpu - INFO - LogisticRegression.fit: cuML nativo na GPU | shape=(119076, 18)
+2026-10-15 23:04:35,274 - src.models.gpu - INFO - LogisticRegression.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+2026-10-15 23:04:35,607 - main - INFO -       -> F1 Padrão: 38.4% | Limiar Otimizado: 0.9697 -> F1 Tunado: 72.2% (Ganho: +33.8%) | PR-AUC: 76.1%
+2026-10-15 23:04:35,608 - main - INFO - [24/24] Testando Regressão Logística | SMOTETomek | Com Tunagem...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `StandardScaler.fit_transform` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+2026-10-15 23:04:36,182 - src.models.gpu - INFO - LogisticRegression.fit: cuML nativo na GPU | shape=(119076, 18)
+2026-10-15 23:04:36,329 - src.models.gpu - INFO - LogisticRegression.fit: concluído na GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+2026-10-15 23:04:36,683 - main - INFO -       -> F1 Padrão: 29.5% | Limiar Otimizado: 0.9596 -> F1 Tunado: 69.8% (Ganho: +40.3%) | PR-AUC: 72.8%
+2026-10-15 23:04:36,684 - main - INFO - ================================================================================
+2026-10-15 23:04:36,684 - main - INFO - ETAPA 3: GERANDO E SALVANDO GRÁFICOS AGRUPADOS DE TUNAGEM
+2026-10-15 23:04:36,685 - main - INFO - ================================================================================
+2026-10-15 23:04:37,001 - main - INFO - Salvo: src/notebooks/graficos/01_comparacao_por_modelo.png
+2026-10-15 23:04:37,381 - main - INFO - Salvo: src/notebooks/graficos/02_impacto_por_tunagem.png
+2026-10-15 23:04:37,683 - main - INFO - Salvo: src/notebooks/graficos/03_tunagem_por_balanceamento.png
+2026-10-15 23:04:37,684 - main - INFO - ================================================================================
+2026-10-15 23:04:37,684 - main - INFO - ETAPA 4: TREINAMENTO DOS MELHORES MODELOS EM 1.6M E PREDIÇÃO NO TESTE DE 400K
+2026-10-15 23:04:37,685 - main - INFO - ================================================================================
+2026-10-15 23:04:37,686 - main - INFO - Melhor configuração selecionada para XGBoost:
+2026-10-15 23:04:37,687 - main - INFO -   Balanceamento: Sem Reamostragem
+2026-10-15 23:04:37,687 - main - INFO -   Tunagem:       Com Tunagem
+2026-10-15 23:04:37,688 - main - INFO - Melhor configuração selecionada para Random Forest:
+2026-10-15 23:04:37,689 - main - INFO -   Balanceamento: Sem Reamostragem
+2026-10-15 23:04:37,689 - main - INFO -   Tunagem:       Sem Tunagem
+2026-10-15 23:04:37,690 - main - INFO - Melhor configuração selecionada para Regressão Logística:
+2026-10-15 23:04:37,691 - main - INFO -   Balanceamento: SMOTE
+2026-10-15 23:04:37,691 - main - INFO -   Tunagem:       Sem Tunagem
+2026-10-15 23:04:37,692 - main - INFO - Treinando modelo final: XGBoost (Sem Reamostragem) no conjunto de 1.6M...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+2026-10-15 23:04:40,409 - main - INFO -   -> Treinamento em 1.6M concluído em 2.72s
+2026-10-15 23:04:40,409 - main - INFO -   -> Calibrando limiar ótimo de decisão na partição de validação...
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:42,157 - main - INFO -   -> Limiar ótimo calibrado: 0.6377
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:04:42,617 - main - INFO -   -> Inferência em 400k concluída em 0.46s
+2026-10-15 23:04:42,813 - main - INFO - Treinando modelo final: Random Forest (Sem Reamostragem) no conjunto de 1.6M...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+2026-10-15 23:04:44,936 - src.models.gpu - INFO - RandomForestClassifier.fit: cuML nativo na GPU | shape=(1400000, 18)
+2026-10-15 23:04:59,221 - src.models.gpu - INFO - RandomForestClassifier.fit: concluído na GPU
+2026-10-15 23:04:59,222 - main - INFO -   -> Treinamento em 1.6M concluído em 16.41s
+2026-10-15 23:04:59,223 - main - INFO -   -> Calibrando limiar ótimo de decisão na partição de validação...
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:05:01,046 - main - INFO -   -> Limiar ótimo calibrado: 0.4747
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+2026-10-15 23:05:01,503 - main - INFO -   -> Inferência em 400k concluída em 0.46s
+2026-10-15 23:05:01,729 - main - INFO - Treinando modelo final: Regressão Logística (SMOTE) no conjunto de 1.6M...
+[cuml.accel] `OneHotEncoder.fit_transform` ran on GPU
+[cuml.accel] `StandardScaler.fit_transform` ran on GPU
+[cuml.accel] `NearestNeighbors.fit` ran on GPU
+[cuml.accel] `NearestNeighbors.kneighbors` ran on GPU
+2026-10-15 23:05:04,655 - src.models.gpu - INFO - LogisticRegression.fit: cuML nativo na GPU | shape=(2778474, 18)
+2026-10-15 23:05:05,717 - src.models.gpu - INFO - LogisticRegression.fit: concluído na GPU
+2026-10-15 23:05:05,719 - main - INFO -   -> Treinamento em 1.6M concluído em 3.99s
+2026-10-15 23:05:05,720 - main - INFO -   -> Calibrando limiar ótimo de decisão na partição de validação...
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+2026-10-15 23:05:07,625 - main - INFO -   -> Limiar ótimo calibrado: 0.9596
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+[cuml.accel] `OneHotEncoder.transform` ran on GPU
+[cuml.accel] `StandardScaler.transform` ran on GPU
+2026-10-15 23:05:08,065 - main - INFO -   -> Inferência em 400k concluída em 0.44s
+2026-10-15 23:05:08,301 - main - INFO - ================================================================================
+2026-10-15 23:05:08,301 - main - INFO - ETAPA 5: TESTE DE DESEMPENHO APROFUNDADO NO CONJUNTO DE TESTE (400.000 TRANSAÇÕES)
+2026-10-15 23:05:08,302 - main - INFO - ================================================================================
+                             Modelo  Accuracy  ...    ROC-AUC     PR-AUC
+0        XGBoost (Sem Reamostragem)  99.70825  ...  99.784072  89.031199
+1  Random Forest (Sem Reamostragem)  99.71200  ...  98.275835  87.549915
+2       Regressão Logística (SMOTE)  99.41950  ...  99.370932  66.254080
+
+[3 rows x 7 columns]
+2026-10-15 23:05:08,307 - main - INFO - ================================================================================
+2026-10-15 23:05:08,307 - main - INFO - AVALIAÇÃO DE IMPACTO FINANCEIRO NO CONJUNTO DE TESTE (400.000 TRANSAÇÕES)
+2026-10-15 23:05:08,307 - main - INFO - ================================================================================
+2026-10-15 23:05:08,308 - main - INFO - Volume Total de Fraudes no Teste: R$ 4,405,302,309.06 (3,075 ocorrências)
+2026-10-15 23:05:08,311 - main - INFO - [XGBoost (Sem Reamostragem)]
+2026-10-15 23:05:08,311 - main - INFO -   -> Fraudes Bloqueadas com Sucesso: R$ 4,004,370,162.56 (90.90% do volume total | 2481/3075 fraudes)
+2026-10-15 23:05:08,312 - main - INFO -   -> Fraudes Não Detectadas (Perda Residual): R$ 400,932,146.50 (9.10% | 594 fraudes)
+2026-10-15 23:05:08,312 - main - INFO -   -> Volume Financeiro de Falsos Alarmes: R$ 390,635,776.57 (573 transações legítimas)
+2026-10-15 23:05:08,315 - main - INFO - [Random Forest (Sem Reamostragem)]
+2026-10-15 23:05:08,315 - main - INFO -   -> Fraudes Bloqueadas com Sucesso: R$ 3,988,930,197.81 (90.55% do volume total | 2388/3075 fraudes)
+2026-10-15 23:05:08,316 - main - INFO -   -> Fraudes Não Detectadas (Perda Residual): R$ 416,372,111.25 (9.45% | 687 fraudes)
+2026-10-15 23:05:08,316 - main - INFO -   -> Volume Financeiro de Falsos Alarmes: R$ 355,263,513.73 (465 transações legítimas)
+2026-10-15 23:05:08,318 - main - INFO - [Regressão Logística (SMOTE)]
+2026-10-15 23:05:08,319 - main - INFO -   -> Fraudes Bloqueadas com Sucesso: R$ 4,014,794,700.06 (91.14% do volume total | 2236/3075 fraudes)
+2026-10-15 23:05:08,320 - main - INFO -   -> Fraudes Não Detectadas (Perda Residual): R$ 390,507,609.00 (8.86% | 839 fraudes)
+2026-10-15 23:05:08,320 - main - INFO -   -> Volume Financeiro de Falsos Alarmes: R$ 3,415,900,010.13 (1,483 transações legítimas)
+2026-10-15 23:05:08,329 - main - INFO - Tabela de métricas de teste de 2M salva em: resultados/tabelas/metricas_teste_2m.csv
+2026-10-15 23:05:08,507 - main - INFO - Salvo: src/notebooks/graficos/04_matrizes_confusao_teste_2m.png
+2026-10-15 23:05:08,945 - main - INFO - Salvo: src/notebooks/graficos/05_curvas_roc_teste_2m.png
+2026-10-15 23:05:09,439 - main - INFO - Salvo: src/notebooks/graficos/06_curvas_precision_recall_teste_2m.png
+2026-10-15 23:05:22,997 - main - INFO - Salvo: src/notebooks/graficos/07_tradeoff_limiar_metricas_teste_2m.png
+2026-10-15 23:05:24,357 - main - INFO - Salvo: src/notebooks/graficos/08_distribuicao_probabilidades_teste_2m.png
+2026-10-15 23:05:24,543 - main - INFO - Salvo: src/notebooks/graficos/09_impacto_financeiro_teste_2m.png
+2026-10-15 23:05:24,544 - main - INFO - ================================================================================
+2026-10-15 23:05:24,545 - main - INFO - MELHOR MODELO SELECIONADO: XGBoost (Sem Reamostragem)
+2026-10-15 23:05:24,545 - main - INFO - PR-AUC: 89.03% | F1: 80.96% | ROC-AUC: 99.78% | Recall: 80.68% | Precision: 81.24%
+2026-10-15 23:05:24,546 - main - INFO - Impacto Financeiro: R$ 4,004,370,162.56 interceptados (90.90% do total de fraudes)
+2026-10-15 23:05:24,546 - main - INFO - ================================================================================

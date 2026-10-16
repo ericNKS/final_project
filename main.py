@@ -1,5 +1,23 @@
 # %%
 import os
+import argparse
+parser = argparse.ArgumentParser(description="Treinamento e gráficos Pix")
+parser.add_argument("--reuse-10k-results", action="store_true", help="Recriar gráficos de 10k usando previsões salvas")
+args = parser.parse_args()
+training_backend = os.environ.get("TRAINING_BACKEND", "gpu")
+if training_backend not in {"gpu", "cpu"}:
+    raise ValueError("TRAINING_BACKEND deve ser gpu ou cpu")
+if training_backend == "gpu":
+    # Instalar antes de sklearn/imblearn também acelera os vizinhos de SMOTETomek.
+    try:
+        from cuml.accel import install
+    except ImportError as exc:
+        raise RuntimeError(
+            "O modo GPU requer cuML no WSL2. No PowerShell, execute ./run_gpu.ps1. "
+            "Para CPU explicitamente, defina TRAINING_BACKEND=cpu."
+        ) from exc
+    install(log_level="info")
+
 import json
 import time
 import numpy as np
@@ -19,6 +37,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
 from imblearn.under_sampling import RandomUnderSampler
 from imblearn.over_sampling import SMOTE
+from imblearn.combine import SMOTETomek
 import xgboost as xgb
 
 from src.data.ingestion import (
@@ -26,9 +45,30 @@ from src.data.ingestion import (
 )
 from src.data.cleaning import prepare2mDataset
 from src.models.xgboost import _getPipeline
+from src.utils.logger import setup_logging, logger
+from src.utils.artifacts import savefig
 
+os.makedirs("logs", exist_ok=True)
 os.makedirs("src/notebooks/graficos", exist_ok=True)
 os.makedirs("resultados/modelos", exist_ok=True)
+
+setup_logging()
+
+# O modo CPU precisa ser solicitado explicitamente com TRAINING_BACKEND=cpu.
+xgb_device = "cuda" if training_backend == "gpu" else "cpu"
+logger.info("Backend de treinamento: %s", training_backend)
+logger.info("Dispositivo solicitado para XGBoost: %s", xgb_device)
+if xgb_device.startswith("cuda"):
+    # Confirma CUDA antes de carregar o dataset; evita fallback silencioso para CPU.
+    gpu_probe = xgb.XGBClassifier(
+        tree_method="hist", device=xgb_device, n_estimators=1, max_depth=1
+    )
+    gpu_probe.fit(np.array([[0.], [1.], [2.], [3.]]), np.array([0, 0, 1, 1]))
+    active_device = json.loads(gpu_probe.get_booster().save_config())["learner"]["generic_param"]["device"]
+    if not active_device.startswith("cuda"):
+        raise RuntimeError("CUDA indisponível no XGBoost. Verifique a instalação e o driver NVIDIA.")
+    logger.info("CUDA confirmado pelo XGBoost: %s", active_device)
+    del gpu_probe
 
 # %%
 """
@@ -40,29 +80,90 @@ Utilizando exclusivamente o dataset de 2M transações reais de Pix:
 - Teste Independente: 20% (400.000 transações) para verificação do desempenho real
 - Amostra de Tunagem: 80.000 transações estratificadas para testes rápidos de hiperparâmetros
 """
-print("="*80)
-print("ETAPA 1: CARREGAMENTO E DIVISÃO DO DATASET DE 2M PIX")
-print("="*80)
+
+logger.info("=" * 80)
+logger.info("ETAPA 1: CARREGAMENTO E DIVISÃO DO DATASET DE 2M PIX")
+logger.info("=" * 80)
 
 t0 = time.time()
 df_raw = loadFraud2mData()
-print(f"Dataset de 2M carregado em {time.time()-t0:.2f}s | Linhas: {len(df_raw):,}")
+logger.info(
+    f"Dataset de 2M carregado em {time.time()-t0:.2f}s "
+    f"| Linhas: {len(df_raw):,}"
+)
 
 X, y = prepare2mDataset(df_raw)
-print(f"Dataset preparado | X shape: {X.shape} | Fraudes totais: {y.sum():,} ({y.mean()*100:.2f}%)")
 
+logger.info(
+    f"Dataset preparado | X shape: {X.shape} "
+    f"| Fraudes totais: {y.sum():,} ({y.mean()*100:.2f}%)"
+)
+
+# 1. Separação inicial: 80% desenvolvimento e 20% teste
 XTrain, XTest, yTrain, yTest = train_test_split(
-    X, y, test_size=0.2, stratify=y, random_state=42
+    X,
+    y,
+    test_size=0.2,
+    stratify=y,
+    random_state=42
 )
-print(f"XTrain (80% treino): {XTrain.shape} | Fraudes: {yTrain.sum():,} ({yTrain.mean()*100:.2f}%)")
-print(f"XTest  (20% teste):  {XTest.shape}  | Fraudes: {yTest.sum():,}  ({yTest.mean()*100:.2f}%)")
 
-# Extração da amostra representativa estratificada para testes de hiperparâmetros
-XSample, ySample = getTuningSample(XTrain, yTrain, sample_size=80000, random_state=42)
-XSubTrain, XSubVal, ySubTrain, ySubVal = train_test_split(
-    XSample, ySample, test_size=0.25, stratify=ySample, random_state=42
+# 2. Separação dos dados de desenvolvimento:
+# 70% do total para treinamento
+# 10% do total para validação independente
+XTrainFinal, XVal, yTrainFinal, yVal = train_test_split(
+    XTrain,
+    yTrain,
+    test_size=0.125,
+    stratify=yTrain,
+    random_state=42
 )
-print(f"Amostra de Tunagem: {XSample.shape} (SubTreino: {XSubTrain.shape}, SubVal: {XSubVal.shape})")
+
+logger.info(
+    f"Treinamento (70%): {XTrainFinal.shape} "
+    f"| Fraudes: {yTrainFinal.sum():,} "
+    f"({yTrainFinal.mean()*100:.2f}%)"
+)
+
+logger.info(
+    f"Validação (10%): {XVal.shape} "
+    f"| Fraudes: {yVal.sum():,} "
+    f"({yVal.mean()*100:.2f}%)"
+)
+
+logger.info(
+    f"Teste (20%): {XTest.shape} "
+    f"| Fraudes: {yTest.sum():,} "
+    f"({yTest.mean()*100:.2f}%)"
+)
+
+# 3. Extração de 80 mil registros exclusivamente do treinamento
+XSample, ySample = getTuningSample(
+    XTrainFinal,
+    yTrainFinal,
+    sample_size=80000,
+    random_state=42
+)
+
+# 4. Divisão da amostra para comparar configurações
+XSubTrain, XSubVal, ySubTrain, ySubVal = train_test_split(
+    XSample,
+    ySample,
+    test_size=0.25,
+    stratify=ySample,
+    random_state=42
+)
+
+logger.info(
+    f"Amostra de Tunagem: {XSample.shape} "
+    f"(SubTreino: {XSubTrain.shape}, "
+    f"SubVal: {XSubVal.shape})"
+)
+
+
+
+
+
 
 # %%
 """
@@ -71,120 +172,160 @@ ETAPA 2: EXPERIMENTOS DE TUNAGEM DE HIPERPARÂMETROS EM TODOS OS MODELOS
 ================================================================================
 Testando sistematicamente:
 - Modelos: XGBoost, Random Forest, Regressão Logística
-- Balanceamentos: Baseline, Under-sampling (RandomUnderSampler), SMOTE
-- Tunagens de Hiperparâmetros: Variações baseadas em pix.py e df2m.py
-- Tunagem de Limiar de Decisão: Limiar Padrão (0.5) vs Limiar Otimizado (F1)
+- Balanceamentos: Sem Reamostragem (Base Original), Under-sampling, SMOTE e SMOTETomek
+- Configurações: Sem Tunagem (Padrão) vs Com Tunagem (Hiperparâmetros Ajustados)
+- Tunagem de Limiar de Decisão: Limiar Padrão (0.50) vs Limiar Otimizado (F1)
 """
-print("\n" + "="*80)
-print("ETAPA 2: EXPERIMENTOS DE TUNAGEM DE HIPERPARÂMETROS (AMOSTRA DE 80K)")
-print("="*80)
+logger.info("=" * 80)
+logger.info("ETAPA 2: EXPERIMENTOS DE TUNAGEM DE HIPERPARÂMETROS (AMOSTRA DE 80K)")
+logger.info("=" * 80)
 
 experiments = []
 
 # --- 1. XGBoost ---
-# Baseline
+# 1.1 Sem Reamostragem
 experiments.append({
-    "modelo": "XGBoost", "balanceamento": "Baseline", "tunagem": "Config A (depth=6, n=40, spw=2.5)",
+    "modelo": "XGBoost", "balanceamento": "Sem Reamostragem", "tunagem": "Sem Tunagem",
     "sampler": None, "numeric_trans": "passthrough",
-    "clf": xgb.XGBClassifier(max_depth=6, n_estimators=40, scale_pos_weight=2.5, learning_rate=0.1, tree_method="hist", random_state=42, n_jobs=-1)
+    "clf": xgb.XGBClassifier(random_state=42, tree_method="hist", n_jobs=-1)
 })
 experiments.append({
-    "modelo": "XGBoost", "balanceamento": "Baseline", "tunagem": "Config B (depth=8, n=50, spw=3.5)",
+    "modelo": "XGBoost", "balanceamento": "Sem Reamostragem", "tunagem": "Com Tunagem",
     "sampler": None, "numeric_trans": "passthrough",
-    "clf": xgb.XGBClassifier(max_depth=8, n_estimators=50, scale_pos_weight=3.5, learning_rate=0.1, tree_method="hist", random_state=42, n_jobs=-1)
+    "clf": xgb.XGBClassifier(max_depth=8, learning_rate=0.1, n_estimators=40, min_child_weight=1, subsample=1, colsample_bytree=1, colsample_bynode=0.9, num_parallel_tree=1, scale_pos_weight=3, tree_method="hist", random_state=42, n_jobs=-1)
 })
-# Under-sampling
+# 1.2 Under-sampling
 experiments.append({
-    "modelo": "XGBoost", "balanceamento": "Under-sampling", "tunagem": "Config A (depth=3, n=100, col=0.8)",
+    "modelo": "XGBoost", "balanceamento": "Under-sampling", "tunagem": "Sem Tunagem",
     "sampler": RandomUnderSampler(sampling_strategy=0.1, random_state=42), "numeric_trans": "passthrough",
-    "clf": xgb.XGBClassifier(max_depth=3, n_estimators=100, colsample_bytree=0.8, scale_pos_weight=1.0, learning_rate=0.1, tree_method="hist", random_state=42, n_jobs=-1)
+    "clf": xgb.XGBClassifier(random_state=42, tree_method="hist", n_jobs=-1)
 })
 experiments.append({
-    "modelo": "XGBoost", "balanceamento": "Under-sampling", "tunagem": "Config B (depth=4, n=150, col=0.8)",
+    "modelo": "XGBoost", "balanceamento": "Under-sampling", "tunagem": "Com Tunagem",
     "sampler": RandomUnderSampler(sampling_strategy=0.1, random_state=42), "numeric_trans": "passthrough",
-    "clf": xgb.XGBClassifier(max_depth=4, n_estimators=150, colsample_bytree=0.8, scale_pos_weight=1.0, learning_rate=0.1, tree_method="hist", random_state=42, n_jobs=-1)
+    "clf": xgb.XGBClassifier(max_depth=1, learning_rate=0.1, n_estimators=500, colsample_bytree=0.8, scale_pos_weight=1, tree_method="hist", random_state=42, n_jobs=-1)
 })
-# SMOTE
+# 1.3 SMOTE
 experiments.append({
-    "modelo": "XGBoost", "balanceamento": "SMOTE", "tunagem": "Config A (depth=6, n=60, child=2)",
+    "modelo": "XGBoost", "balanceamento": "SMOTE", "tunagem": "Sem Tunagem",
     "sampler": SMOTE(random_state=42), "numeric_trans": "passthrough",
-    "clf": xgb.XGBClassifier(max_depth=6, n_estimators=60, min_child_weight=2, subsample=0.8, tree_method="hist", random_state=42, n_jobs=-1)
+    "clf": xgb.XGBClassifier(random_state=42, tree_method="hist", n_jobs=-1)
 })
 experiments.append({
-    "modelo": "XGBoost", "balanceamento": "SMOTE", "tunagem": "Config B (depth=8, n=80, child=4)",
+    "modelo": "XGBoost", "balanceamento": "SMOTE", "tunagem": "Com Tunagem",
     "sampler": SMOTE(random_state=42), "numeric_trans": "passthrough",
-    "clf": xgb.XGBClassifier(max_depth=8, n_estimators=80, min_child_weight=4, subsample=0.8, tree_method="hist", random_state=42, n_jobs=-1)
+    "clf": xgb.XGBClassifier(max_depth=20, learning_rate=0.2, n_estimators=1000, random_state=0, min_child_weight=1, subsample=1, colsample_bytree=0.8, colsample_bynode=0.7, num_parallel_tree=1, scale_pos_weight=1, tree_method="hist", n_jobs=-1 )
+})
+# 1.4 SMOTETomek
+experiments.append({
+    "modelo": "XGBoost", "balanceamento": "SMOTETomek", "tunagem": "Sem Tunagem",
+    "sampler": SMOTETomek(random_state=42), "numeric_trans": "passthrough",
+    "clf": xgb.XGBClassifier(random_state=42, tree_method="hist", n_jobs=-1)
+})
+experiments.append({
+    "modelo": "XGBoost", "balanceamento": "SMOTETomek", "tunagem": "Com Tunagem",
+    "sampler": SMOTETomek(random_state=42), "numeric_trans": "passthrough",
+    "clf": xgb.XGBClassifier(max_depth=14, learning_rate=0.1, n_estimators=40, colsample_bytree=0.5, scale_pos_weight=2.8, random_state=42, tree_method="hist", n_jobs=-1)
 })
 
 # --- 2. Random Forest ---
-# Baseline
+# 2.1 Sem Reamostragem
 experiments.append({
-    "modelo": "Random Forest", "balanceamento": "Baseline", "tunagem": "Config A (n=50, depth=10, balanced)",
+    "modelo": "Random Forest", "balanceamento": "Sem Reamostragem", "tunagem": "Sem Tunagem",
     "sampler": None, "numeric_trans": "passthrough",
-    "clf": RandomForestClassifier(n_estimators=50, max_depth=10, class_weight="balanced", random_state=42, n_jobs=-1)
+    "clf": RandomForestClassifier(random_state=42, n_jobs=-1)
 })
 experiments.append({
-    "modelo": "Random Forest", "balanceamento": "Baseline", "tunagem": "Config B (n=60, depth=14, balanced)",
+    "modelo": "Random Forest", "balanceamento": "Sem Reamostragem", "tunagem": "Com Tunagem",
     "sampler": None, "numeric_trans": "passthrough",
-    "clf": RandomForestClassifier(n_estimators=60, max_depth=14, class_weight="balanced", random_state=42, n_jobs=-1)
+    "clf": RandomForestClassifier(n_estimators=60, max_depth=12, min_samples_leaf=2, class_weight="balanced", random_state=42, n_jobs=-1)
 })
-# Under-sampling
+# 2.2 Under-sampling
 experiments.append({
-    "modelo": "Random Forest", "balanceamento": "Under-sampling", "tunagem": "Config A (n=50, depth=10, leaf=2)",
+    "modelo": "Random Forest", "balanceamento": "Under-sampling", "tunagem": "Sem Tunagem",
     "sampler": RandomUnderSampler(sampling_strategy=0.1, random_state=42), "numeric_trans": "passthrough",
-    "clf": RandomForestClassifier(n_estimators=50, max_depth=10, min_samples_leaf=2, random_state=42, n_jobs=-1)
+    "clf": RandomForestClassifier(random_state=42, n_jobs=-1)
 })
 experiments.append({
-    "modelo": "Random Forest", "balanceamento": "Under-sampling", "tunagem": "Config B (n=80, depth=12, leaf=1)",
+    "modelo": "Random Forest", "balanceamento": "Under-sampling", "tunagem": "Com Tunagem",
     "sampler": RandomUnderSampler(sampling_strategy=0.1, random_state=42), "numeric_trans": "passthrough",
-    "clf": RandomForestClassifier(n_estimators=80, max_depth=12, min_samples_leaf=1, random_state=42, n_jobs=-1)
+    "clf": RandomForestClassifier(n_estimators=80, max_depth=10, min_samples_leaf=2, random_state=42, n_jobs=-1)
 })
-# SMOTE
+# 2.3 SMOTE
 experiments.append({
-    "modelo": "Random Forest", "balanceamento": "SMOTE", "tunagem": "Config A (n=40, depth=10, leaf=2)",
+    "modelo": "Random Forest", "balanceamento": "SMOTE", "tunagem": "Sem Tunagem",
     "sampler": SMOTE(random_state=42), "numeric_trans": "passthrough",
-    "clf": RandomForestClassifier(n_estimators=40, max_depth=10, min_samples_leaf=2, random_state=42, n_jobs=-1)
+    "clf": RandomForestClassifier(random_state=42, n_jobs=-1)
 })
 experiments.append({
-    "modelo": "Random Forest", "balanceamento": "SMOTE", "tunagem": "Config B (n=60, depth=12, leaf=1)",
+    "modelo": "Random Forest", "balanceamento": "SMOTE", "tunagem": "Com Tunagem",
     "sampler": SMOTE(random_state=42), "numeric_trans": "passthrough",
+    "clf": RandomForestClassifier(n_estimators=60, max_depth=10, min_samples_leaf=2, random_state=42, n_jobs=-1)
+})
+# 2.4 SMOTETomek
+experiments.append({
+    "modelo": "Random Forest", "balanceamento": "SMOTETomek", "tunagem": "Sem Tunagem",
+    "sampler": SMOTETomek(random_state=42), "numeric_trans": "passthrough",
+    "clf": RandomForestClassifier(random_state=42, n_jobs=-1)
+})
+experiments.append({
+    "modelo": "Random Forest", "balanceamento": "SMOTETomek", "tunagem": "Com Tunagem",
+    "sampler": SMOTETomek(random_state=42), "numeric_trans": "passthrough",
     "clf": RandomForestClassifier(n_estimators=60, max_depth=12, min_samples_leaf=1, random_state=42, n_jobs=-1)
 })
 
 # --- 3. Regressão Logística ---
-# Baseline
+# 3.1 Sem Reamostragem
 experiments.append({
-    "modelo": "Regressão Logística", "balanceamento": "Baseline", "tunagem": "Config A (C=0.1, balanced)",
+    "modelo": "Regressão Logística", "balanceamento": "Sem Reamostragem", "tunagem": "Sem Tunagem",
+    "sampler": None, "numeric_trans": StandardScaler(),
+    "clf": LogisticRegression(C=1.0, max_iter=1000, random_state=42)
+})
+experiments.append({
+    "modelo": "Regressão Logística", "balanceamento": "Sem Reamostragem", "tunagem": "Com Tunagem",
     "sampler": None, "numeric_trans": StandardScaler(),
     "clf": LogisticRegression(C=0.1, class_weight="balanced", max_iter=1000, random_state=42)
 })
+# 3.2 Under-sampling
 experiments.append({
-    "modelo": "Regressão Logística", "balanceamento": "Baseline", "tunagem": "Config B (C=1.0, balanced)",
-    "sampler": None, "numeric_trans": StandardScaler(),
-    "clf": LogisticRegression(C=1.0, class_weight="balanced", max_iter=1000, random_state=42)
-})
-# Under-sampling
-experiments.append({
-    "modelo": "Regressão Logística", "balanceamento": "Under-sampling", "tunagem": "Config A (C=0.1, standard)",
-    "sampler": RandomUnderSampler(sampling_strategy=0.1, random_state=42), "numeric_trans": StandardScaler(),
-    "clf": LogisticRegression(C=0.1, max_iter=1000, random_state=42)
-})
-experiments.append({
-    "modelo": "Regressão Logística", "balanceamento": "Under-sampling", "tunagem": "Config B (C=1.0, standard)",
+    "modelo": "Regressão Logística", "balanceamento": "Under-sampling", "tunagem": "Sem Tunagem",
     "sampler": RandomUnderSampler(sampling_strategy=0.1, random_state=42), "numeric_trans": StandardScaler(),
     "clf": LogisticRegression(C=1.0, max_iter=1000, random_state=42)
 })
-# SMOTE
 experiments.append({
-    "modelo": "Regressão Logística", "balanceamento": "SMOTE", "tunagem": "Config A (C=0.1, standard)",
-    "sampler": SMOTE(random_state=42), "numeric_trans": StandardScaler(),
+    "modelo": "Regressão Logística", "balanceamento": "Under-sampling", "tunagem": "Com Tunagem",
+    "sampler": RandomUnderSampler(sampling_strategy=0.1, random_state=42), "numeric_trans": StandardScaler(),
     "clf": LogisticRegression(C=0.1, max_iter=1000, random_state=42)
 })
+# 3.3 SMOTE
 experiments.append({
-    "modelo": "Regressão Logística", "balanceamento": "SMOTE", "tunagem": "Config B (C=1.0, standard)",
+    "modelo": "Regressão Logística", "balanceamento": "SMOTE", "tunagem": "Sem Tunagem",
     "sampler": SMOTE(random_state=42), "numeric_trans": StandardScaler(),
     "clf": LogisticRegression(C=1.0, max_iter=1000, random_state=42)
 })
+experiments.append({
+    "modelo": "Regressão Logística", "balanceamento": "SMOTE", "tunagem": "Com Tunagem",
+    "sampler": SMOTE(random_state=42), "numeric_trans": StandardScaler(),
+    "clf": LogisticRegression(C=0.1, max_iter=1000, random_state=42)
+})
+# 3.4 SMOTETomek
+experiments.append({
+    "modelo": "Regressão Logística", "balanceamento": "SMOTETomek", "tunagem": "Sem Tunagem",
+    "sampler": SMOTETomek(random_state=42), "numeric_trans": StandardScaler(),
+    "clf": LogisticRegression(C=1.0, max_iter=1000, random_state=42)
+})
+experiments.append({
+    "modelo": "Regressão Logística", "balanceamento": "SMOTETomek", "tunagem": "Com Tunagem",
+    "sampler": SMOTETomek(random_state=42), "numeric_trans": StandardScaler(),
+    "clf": LogisticRegression(C=0.1, max_iter=1000, random_state=42)
+})
+
+for exp in experiments:
+    if isinstance(exp["clf"], xgb.XGBClassifier):
+        exp["clf"].set_params(device=xgb_device)
+    elif training_backend == "gpu":
+        from src.models.gpu import GPUClassifier
+        exp["clf"] = GPUClassifier(exp["clf"])
 
 results_list = []
 
@@ -192,7 +333,7 @@ for idx, exp in enumerate(experiments):
     m_name = exp["modelo"]
     bal = exp["balanceamento"]
     tun = exp["tunagem"]
-    print(f"[{idx+1:02d}/{len(experiments):02d}] Testando {m_name} | {bal} | {tun}...")
+    logger.info(f"[{idx+1:02d}/{len(experiments):02d}] Testando {m_name} | {bal} | {tun}...")
 
     pipe = _getPipeline(
         sampler=exp["sampler"],
@@ -240,7 +381,7 @@ for idx, exp in enumerate(experiments):
         "PR_AUC": pr_auc,
         "ROC_AUC": roc_auc
     })
-    print(f"      -> F1 Padrão: {f1_def*100:.1f}% | Limiar Otimizado: {thresh_opt:.4f} -> F1 Tunado: {f1_tun*100:.1f}% (Ganho: +{(f1_tun-f1_def)*100:.1f}%) | PR-AUC: {pr_auc*100:.1f}%")
+    logger.info(f"      -> F1 Padrão: {f1_def*100:.1f}% | Limiar Otimizado: {thresh_opt:.4f} -> F1 Tunado: {f1_tun*100:.1f}% (Ganho: +{(f1_tun-f1_def)*100:.1f}%) | PR-AUC: {pr_auc*100:.1f}%")
 
 df_tuning = pd.DataFrame(results_list)
 
@@ -250,9 +391,9 @@ df_tuning = pd.DataFrame(results_list)
 ETAPA 3: GERAÇÃO DE GRÁFICOS AGRUPADOS (MODELO, TUNAGEM, BALANCEAMENTO)
 ================================================================================
 """
-print("\n" + "="*80)
-print("ETAPA 3: GERANDO E SALVANDO GRÁFICOS AGRUPADOS DE TUNAGEM")
-print("="*80)
+logger.info("=" * 80)
+logger.info("ETAPA 3: GERANDO E SALVANDO GRÁFICOS AGRUPADOS DE TUNAGEM")
+logger.info("=" * 80)
 
 models_order = ["XGBoost", "Random Forest", "Regressão Logística"]
 palette = {"XGBoost": "#1f77b4", "Random Forest": "#2ca02c", "Regressão Logística": "#ff7f0e"}
@@ -279,19 +420,19 @@ axes[2].grid(axis="y", linestyle="--", alpha=0.5)
 
 plt.suptitle("AGRUPAMENTO POR MODELOS: Comparação Geral de Desempenho", fontsize=15, fontweight="bold", y=1.03)
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/01_comparacao_por_modelo.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/01_comparacao_por_modelo.png", dpi=150, bbox_inches="tight")
 plt.close()
-print("Salvo: src/notebooks/graficos/01_comparacao_por_modelo.png")
+logger.info("Salvo: src/notebooks/graficos/01_comparacao_por_modelo.png")
 
 # --- Gráfico 2: Agrupamento por Tunagem (Impacto da Calibração do Limiar) ---
-fig, ax = plt.subplots(figsize=(16, 7))
+fig, ax = plt.subplots(figsize=(20, 8))
 df_melted = df_tuning.melt(
     id_vars=["Modelo", "Balanceamento", "Tunagem"],
     value_vars=["F1_Padrao", "F1_Tunado"],
     var_name="Tipo_Limiar", value_name="F1_Score"
 )
 df_melted["Tipo_Limiar"] = df_melted["Tipo_Limiar"].map({"F1_Padrao": "Limiar Padrão (0.50)", "F1_Tunado": "Limiar Tunado (Otimizado)"})
-df_melted["Experimento_Label"] = df_melted["Modelo"] + " - " + df_melted["Balanceamento"] + " (" + df_melted["Tunagem"].apply(lambda s: s[:8]) + ")"
+df_melted["Experimento_Label"] = df_melted["Modelo"] + " - " + df_melted["Balanceamento"] + " (" + df_melted["Tunagem"] + ")"
 
 sns.barplot(
     data=df_melted, x="Experimento_Label", y="F1_Score", hue="Tipo_Limiar",
@@ -306,17 +447,19 @@ ax.grid(axis="y", linestyle="--", alpha=0.5)
 ax.legend(title="Estratégia de Limiar", loc="upper left", frameon=True)
 
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/02_impacto_por_tunagem.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/02_impacto_por_tunagem.png", dpi=150, bbox_inches="tight")
 plt.close()
-print("Salvo: src/notebooks/graficos/02_impacto_por_tunagem.png")
+logger.info("Salvo: src/notebooks/graficos/02_impacto_por_tunagem.png")
 
 # --- Gráfico 3: Agrupamento por Tunagem e Balanceamento ---
-fig, axes = plt.subplots(1, 3, figsize=(18, 5.5), sharey=True)
+fig, axes = plt.subplots(1, 3, figsize=(20, 6), sharey=True)
+balance_order = ["Sem Reamostragem", "Under-sampling", "SMOTE", "SMOTETomek"]
 for i, m_name in enumerate(models_order):
     sub_df = df_tuning[df_tuning["Modelo"] == m_name]
     sns.barplot(
         data=sub_df, x="Balanceamento", y="F1_Tunado", hue="Tunagem",
-        palette="viridis", ax=axes[i]
+        order=balance_order,
+        palette={"Sem Tunagem": "#94a3b8", "Com Tunagem": "#10b981"}, ax=axes[i]
     )
     axes[i].set_title(f"{m_name}\nF1 Tunado por Balanceamento", fontweight="bold", fontsize=12)
     axes[i].set_ylabel("F1-Score" if i == 0 else "")
@@ -326,9 +469,9 @@ for i, m_name in enumerate(models_order):
 
 plt.suptitle("AGRUPAMENTO POR TUNAGEM E BALANCEAMENTO: Cruzamento entre Reamostragem e Hiperparâmetros", fontsize=14, fontweight="bold", y=1.03)
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/03_tunagem_por_balanceamento.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/03_tunagem_por_balanceamento.png", dpi=150, bbox_inches="tight")
 plt.close()
-print("Salvo: src/notebooks/graficos/03_tunagem_por_balanceamento.png")
+logger.info("Salvo: src/notebooks/graficos/03_tunagem_por_balanceamento.png")
 
 # %%
 """
@@ -336,18 +479,18 @@ print("Salvo: src/notebooks/graficos/03_tunagem_por_balanceamento.png")
 ETAPA 4: TREINAMENTO DOS MELHORES MODELOS EM XTRAIN (1.6M)
 ================================================================================
 """
-print("\n" + "="*80)
-print("ETAPA 4: TREINAMENTO DOS MELHORES MODELOS EM 1.6M E PREDIÇÃO NO TESTE DE 400K")
-print("="*80)
+logger.info("=" * 80)
+logger.info("ETAPA 4: TREINAMENTO DOS MELHORES MODELOS EM 1.6M E PREDIÇÃO NO TESTE DE 400K")
+logger.info("=" * 80)
 
 best_configs = {}
 for m_name in models_order:
     sub = df_tuning[df_tuning["Modelo"] == m_name]
     best_row_idx = (sub["PR_AUC"] * 0.5 + sub["F1_Tunado"] * 0.5).idxmax()
     best_configs[m_name] = experiments[best_row_idx]
-    print(f"\nMelhor configuração selecionada para {m_name}:")
-    print(f"  Balanceamento: {best_configs[m_name]['balanceamento']}")
-    print(f"  Tunagem:       {best_configs[m_name]['tunagem']}")
+    logger.info(f"Melhor configuração selecionada para {m_name}:")
+    logger.info(f"  Balanceamento: {best_configs[m_name]['balanceamento']}")
+    logger.info(f"  Tunagem:       {best_configs[m_name]['tunagem']}")
 
 final_model_names = []
 final_test_results = []
@@ -358,7 +501,7 @@ final_y_preds = {}
 for m_name in models_order:
     cfg = best_configs[m_name]
     display_name = f"{m_name} ({cfg['balanceamento']})"
-    print(f"\nTreinando modelo final: {display_name} no conjunto de 1.6M...")
+    logger.info(f"Treinando modelo final: {display_name} no conjunto de 1.6M...")
 
     pipe_final = _getPipeline(
         sampler=cfg["sampler"],
@@ -366,18 +509,18 @@ for m_name in models_order:
         numeric_transformer=cfg["numeric_trans"]
     )
     t_start = time.time()
-    pipe_final.fit(XTrain, yTrain)
-    print(f"  -> Treinamento em 1.6M concluído em {time.time()-t_start:.2f}s")
+    pipe_final.fit(XTrainFinal, yTrainFinal)
+    logger.info(f"  -> Treinamento em 1.6M concluído em {time.time()-t_start:.2f}s")
 
-    print("  -> Calibrando limiar ótimo de decisão na partição de validação...")
+    logger.info("  -> Calibrando limiar ótimo de decisão na partição de validação...")
     tuned_final = TunedThresholdClassifierCV(pipe_final, scoring="f1", cv="prefit", refit=False)
-    tuned_final.fit(XSubVal, ySubVal)
-    print(f"  -> Limiar ótimo calibrado: {tuned_final.best_threshold_:.4f}")
+    tuned_final.fit(XVal, yVal)
+    logger.info(f"  -> Limiar ótimo calibrado: {tuned_final.best_threshold_:.4f}")
 
     t_start = time.time()
     y_pred = tuned_final.predict(XTest)
     y_prob = tuned_final.predict_proba(XTest)[:, 1]
-    print(f"  -> Inferência em 400k concluída em {time.time()-t_start:.2f}s")
+    logger.info(f"  -> Inferência em 400k concluída em {time.time()-t_start:.2f}s")
 
     acc = accuracy_score(yTest, y_pred)
     prec = precision_score(yTest, y_pred, zero_division=0)
@@ -419,22 +562,22 @@ Avaliação completa no conjunto que NÃO participou do treinamento:
    - Distribuição de Densidade das Probabilidades Preditas no Teste (08)
    - Impacto Financeiro / Fraudes Interceptadas em R$ no Teste (09)
 """
-print("\n" + "="*80)
-print("ETAPA 5: TESTE DE DESEMPENHO APROFUNDADO NO CONJUNTO DE TESTE (400.000 TRANSAÇÕES)")
-print("="*80)
+logger.info("=" * 80)
+logger.info("ETAPA 5: TESTE DE DESEMPENHO APROFUNDADO NO CONJUNTO DE TESTE (400.000 TRANSAÇÕES)")
+logger.info("=" * 80)
 
 # 1. Tabela de Métricas
 printTestResult(final_model_names, *final_test_results)
 
 # 2. Avaliação de Impacto Financeiro
-print("\n" + "="*80)
-print("AVALIAÇÃO DE IMPACTO FINANCEIRO NO CONJUNTO DE TESTE (400.000 TRANSAÇÕES)")
-print("="*80)
+logger.info("=" * 80)
+logger.info("AVALIAÇÃO DE IMPACTO FINANCEIRO NO CONJUNTO DE TESTE (400.000 TRANSAÇÕES)")
+logger.info("=" * 80)
 
 frauds_mask = (yTest == 1)
 total_fraud_val = float(XTest.loc[frauds_mask, "valor_brl"].sum())
 total_fraud_count = int(frauds_mask.sum())
-print(f"Volume Total de Fraudes no Teste: R$ {total_fraud_val:,.2f} ({total_fraud_count:,} ocorrências)")
+logger.info(f"Volume Total de Fraudes no Teste: R$ {total_fraud_val:,.2f} ({total_fraud_count:,} ocorrências)")
 
 financial_metrics_list = []
 for name in final_model_names:
@@ -458,10 +601,28 @@ for name in final_model_names:
         "pct_financeiro_salvo": pct_saved
     })
 
-    print(f"\n[{name}]")
-    print(f"  -> Fraudes Bloqueadas com Sucesso: R$ {val_intercepted:,.2f} ({pct_saved:.2f}% do volume total | {count_intercepted}/{total_fraud_count} fraudes)")
-    print(f"  -> Fraudes Não Detectadas (Perda Residual): R$ {val_lost:,.2f} ({100-pct_saved:.2f}% | {count_lost} fraudes)")
-    print(f"  -> Volume Financeiro de Falsos Alarmes: R$ {val_fp:,.2f} ({count_fp:,} transações legítimas)")
+    logger.info(f"[{name}]")
+    logger.info(f"  -> Fraudes Bloqueadas com Sucesso: R$ {val_intercepted:,.2f} ({pct_saved:.2f}% do volume total | {count_intercepted}/{total_fraud_count} fraudes)")
+    logger.info(f"  -> Fraudes Não Detectadas (Perda Residual): R$ {val_lost:,.2f} ({100-pct_saved:.2f}% | {count_lost} fraudes)")
+    logger.info(f"  -> Volume Financeiro de Falsos Alarmes: R$ {val_fp:,.2f} ({count_fp:,} transações legítimas)")
+
+df_test_2m = pd.DataFrame([{
+    "modelo": name,
+    "accuracy": res["accuracy"],
+    "precision": res["precision"],
+    "recall": res["recall"],
+    "f1": res["f1"],
+    "roc_auc": res["roc_auc"],
+    "pr_auc": res["pr_auc"],
+    "limiar": res["limiar"],
+    "fraudes_interceptadas_brl": fin["fraudes_interceptadas_brl"],
+    "fraudes_nao_detectadas_brl": fin["fraudes_nao_detectadas_brl"],
+    "falsos_positivos_brl": fin["falsos_positivos_brl"],
+    "pct_financeiro_salvo": fin["pct_financeiro_salvo"]
+} for name, res, fin in zip(final_model_names, final_test_results, financial_metrics_list)])
+os.makedirs("resultados/tabelas", exist_ok=True)
+df_test_2m.to_csv("resultados/tabelas/metricas_teste_2m.csv", index=False)
+logger.info("Tabela de métricas de teste de 2M salva em: resultados/tabelas/metricas_teste_2m.csv")
 
 # --- Gráfico 4: Matrizes de Confusão no Teste de 2M ---
 fig, axes = plt.subplots(1, len(final_model_names), figsize=(5.5 * len(final_model_names), 4.5))
@@ -480,13 +641,13 @@ for idx, (name, res) in enumerate(zip(final_model_names, final_test_results)):
 
 plt.suptitle("TESTE NO DATASET INDEPENDENTE (400k): Matrizes de Confusão", fontsize=14, fontweight="bold", y=1.05)
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/04_matrizes_confusao_teste_2m.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/04_matrizes_confusao_teste_2m.png", dpi=150, bbox_inches="tight")
 plt.close()
-print("\nSalvo: src/notebooks/graficos/04_matrizes_confusao_teste_2m.png")
+logger.info("Salvo: src/notebooks/graficos/04_matrizes_confusao_teste_2m.png")
 
 # --- Gráfico 5: Curvas ROC no Teste Independente ---
 plt.figure(figsize=(9, 7))
-colors_map = [palette.get(m.split()[0], "#333333") for m in final_model_names]
+colors_map = [next((v for k, v in palette.items() if k in m), "#333333") for m in final_model_names]
 
 for name, color in zip(final_model_names, colors_map):
     fpr, tpr, _ = roc_curve(yTest, final_y_probs[name])
@@ -500,9 +661,9 @@ plt.ylabel("Taxa de Verdadeiros Positivos (TPR / Recall)", fontweight="bold")
 plt.grid(True, linestyle="--", alpha=0.5)
 plt.legend(loc="lower right", fontsize=10, frameon=True)
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/05_curvas_roc_teste_2m.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/05_curvas_roc_teste_2m.png", dpi=150, bbox_inches="tight")
 plt.close()
-print("Salvo: src/notebooks/graficos/05_curvas_roc_teste_2m.png")
+logger.info("Salvo: src/notebooks/graficos/05_curvas_roc_teste_2m.png")
 
 # --- Gráfico 6: Curvas Precision-Recall no Teste Independente ---
 plt.figure(figsize=(9, 7))
@@ -526,40 +687,30 @@ plt.ylabel("Precision (Taxa de Acerto nas Suspeitas)", fontweight="bold")
 plt.grid(True, linestyle="--", alpha=0.5)
 plt.legend(loc="upper right", fontsize=9, frameon=True)
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/06_curvas_precision_recall_teste_2m.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/06_curvas_precision_recall_teste_2m.png", dpi=150, bbox_inches="tight")
 plt.close()
-print("Salvo: src/notebooks/graficos/06_curvas_precision_recall_teste_2m.png")
+logger.info("Salvo: src/notebooks/graficos/06_curvas_precision_recall_teste_2m.png")
 
-# --- Gráfico 7: Trade-off Limiar vs Métricas no Teste (Melhor Modelo: XGBoost) ---
+# Preserva probabilidades para novos gráficos sem repetir o treinamento.
+pd.DataFrame({
+    "classe_real": np.asarray(yTest),
+    **{name + "_prob": probs for name, probs in final_y_probs.items()},
+    **{name + "_pred": preds for name, preds in final_y_preds.items()},
+}).to_parquet("resultados/tabelas/predicoes_teste_2m.parquet", index=False)
+
+# --- Gráfico 7: trade-off dos três modelos finais e contagens de acertos ---
+from src.visualization.model_diagnostics import plot_model_diagnostics
+plot_model_diagnostics(
+    yTest, final_y_probs, final_y_preds,
+    {name: res["limiar"] for name, res in zip(final_model_names, final_test_results)},
+    "src/notebooks/graficos", "Dataset 2M",
+    "07_tradeoff_limiar_metricas_teste_2m.png",
+    "15_acertos_falsos_positivos_teste_2m.png",
+)
+logger.info("Salvos: trade-off de todos os modelos e contagens de acertos/falsos positivos (2M)")
 best_name = final_model_names[0]
 best_probs = final_y_probs[best_name]
 best_limiar = final_test_results[0]["limiar"]
-
-thresholds_range = np.linspace(0.01, 0.99, 150)
-f1_curve, prec_curve, rec_curve = [], [], []
-
-for t_val in thresholds_range:
-    y_temp = (best_probs >= t_val).astype(int)
-    f1_curve.append(f1_score(yTest, y_temp, zero_division=0))
-    prec_curve.append(precision_score(yTest, y_temp, zero_division=0))
-    rec_curve.append(recall_score(yTest, y_temp, zero_division=0))
-
-plt.figure(figsize=(10, 6))
-plt.plot(thresholds_range, f1_curve, label="F1-Score", color="#2563eb", linewidth=2.5)
-plt.plot(thresholds_range, prec_curve, label="Precision", color="#16a34a", linewidth=2.0)
-plt.plot(thresholds_range, rec_curve, label="Recall", color="#dc2626", linewidth=2.0)
-plt.axvline(x=best_limiar, color="purple", linestyle="--", linewidth=2, label=f"Limiar Otimizado ({best_limiar:.4f})")
-plt.scatter(best_limiar, final_test_results[0]["f1"], color="purple", s=100, zorder=5, label=f"F1 Máximo = {final_test_results[0]['f1']*100:.1f}%")
-
-plt.title(f"TESTE NO DATASET INDEPENDENTE (400k): Trade-off Limiar vs Métricas ({best_name})", fontsize=13, fontweight="bold", pad=15)
-plt.xlabel("Limiar de Decisão de Fraude (Probability Threshold)", fontweight="bold")
-plt.ylabel("Pontuação da Métrica", fontweight="bold")
-plt.grid(True, linestyle="--", alpha=0.5)
-plt.legend(loc="center left", frameon=True)
-plt.tight_layout()
-plt.savefig("src/notebooks/graficos/07_tradeoff_limiar_metricas_teste_2m.png", dpi=150, bbox_inches="tight")
-plt.close()
-print("Salvo: src/notebooks/graficos/07_tradeoff_limiar_metricas_teste_2m.png")
 
 # --- Gráfico 8: Distribuição de Densidade das Probabilidades Preditas no Teste ---
 plt.figure(figsize=(10, 6))
@@ -573,9 +724,9 @@ plt.ylabel("Densidade de Frequência", fontweight="bold")
 plt.grid(True, linestyle="--", alpha=0.5)
 plt.legend(loc="upper center", frameon=True)
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/08_distribuicao_probabilidades_teste_2m.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/08_distribuicao_probabilidades_teste_2m.png", dpi=150, bbox_inches="tight")
 plt.close()
-print("Salvo: src/notebooks/graficos/08_distribuicao_probabilidades_teste_2m.png")
+logger.info("Salvo: src/notebooks/graficos/08_distribuicao_probabilidades_teste_2m.png")
 
 # --- Gráfico 9: Impacto Financeiro no Conjunto de Teste ---
 fig, ax = plt.subplots(figsize=(12, 6))
@@ -606,9 +757,9 @@ for bar in b2:
                 ha='center', va='bottom', color='black', fontweight='bold', fontsize=9)
 
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/09_impacto_financeiro_teste_2m.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/09_impacto_financeiro_teste_2m.png", dpi=150, bbox_inches="tight")
 plt.close()
-print("Salvo: src/notebooks/graficos/09_impacto_financeiro_teste_2m.png")
+logger.info("Salvo: src/notebooks/graficos/09_impacto_financeiro_teste_2m.png")
 
 # %%
 """
@@ -622,11 +773,11 @@ best_pipeline = final_pipelines[best_idx]
 best_metrics = final_test_results[best_idx]
 best_financial = financial_metrics_list[best_idx]
 
-print("\n" + "="*80)
-print(f"MELHOR MODELO SELECIONADO: {best_model_name}")
-print(f"PR-AUC: {best_metrics['pr_auc']*100:.2f}% | F1: {best_metrics['f1']*100:.2f}% | ROC-AUC: {best_metrics['roc_auc']*100:.2f}% | Recall: {best_metrics['recall']*100:.2f}% | Precision: {best_metrics['precision']*100:.2f}%")
-print(f"Impacto Financeiro: R$ {best_financial['fraudes_interceptadas_brl']:,.2f} interceptados ({best_financial['pct_financeiro_salvo']:.2f}% do total de fraudes)")
-print("="*80)
+logger.info("=" * 80)
+logger.info(f"MELHOR MODELO SELECIONADO: {best_model_name}")
+logger.info(f"PR-AUC: {best_metrics['pr_auc']*100:.2f}% | F1: {best_metrics['f1']*100:.2f}% | ROC-AUC: {best_metrics['roc_auc']*100:.2f}% | Recall: {best_metrics['recall']*100:.2f}% | Precision: {best_metrics['precision']*100:.2f}%")
+logger.info(f"Impacto Financeiro: R$ {best_financial['fraudes_interceptadas_brl']:,.2f} interceptados ({best_financial['pct_financeiro_salvo']:.2f}% do total de fraudes)")
+logger.info("=" * 80)
 
 model_metadata = {
     "modelo": best_model_name,
@@ -656,3 +807,63 @@ model_metadata = {
 }
 
 saveModelArtifact(best_pipeline, model_metadata, filepath="resultados/modelos/melhor_modelo_pix.joblib")
+
+# %%
+"""
+================================================================================
+ETAPA 7: PROCESSAMENTO E GERAÇÃO DOS GRÁFICOS DO DATASET DE 10K PIX
+================================================================================
+Gera todos os 9 gráficos individuais do dataset de 10k (anomalias cadastrais sintéticas)
+em 'src/notebooks/graficos/10k/' e o painel consolidado em 'resultados/10k/visao_geral.png'.
+"""
+logger.info("=" * 80)
+logger.info("ETAPA 7: PROCESSAMENTO E GERAÇÃO DOS GRÁFICOS DO DATASET DE 10K PIX")
+logger.info("=" * 80)
+
+from plot_pix_10k import generate_10k_plots
+data_10k_res = generate_10k_plots(use_saved=args.reuse_10k_results)
+logger.info("Gráficos do dataset de 10k gerados com sucesso em: src/notebooks/graficos/10k/")
+
+# %%
+"""
+================================================================================
+ETAPA 8: COMPARAÇÃO ESTRUTURAL ENTRE DATASET PEQUENO (10K) E GRANDE (2M)
+================================================================================
+Gera os gráficos comparativos diretos lado a lado (10 a 14) em 'src/notebooks/graficos/':
+- 10_comparacao_10k_vs_2m_metricas.png: F1, Precision, Recall, PR-AUC, ROC-AUC lado a lado
+- 11_comparacao_10k_vs_2m_resolucao_degrau.png: Resolução estatística (5% por erro no 10k vs 0.0325% no 2M)
+- 12_comparacao_10k_vs_2m_curvas_pr_roc.png: Painel 2x2 com Curvas ROC e PR e limiares de prevalência
+- 13_comparacao_10k_vs_2m_balanceamento.png: Papel do balanceamento (vital em 10k vs custo/ruído em 2M)
+- 14_comparacao_10k_vs_2m_escala_financeira.png: Escala de negócio (R$ milhares vs R$ bilhões)
+"""
+logger.info("=" * 80)
+logger.info("ETAPA 8: COMPARAÇÃO ESTRUTURAL ENTRE DATASET PEQUENO (10K) E GRANDE (2M)")
+logger.info("=" * 80)
+
+from src.visualization.comparison_10k_2m import generate_comparison_plots
+comp_table = generate_comparison_plots(
+    metrics_2m=[{
+        "modelo": name,
+        "accuracy": res["accuracy"],
+        "precision": res["precision"],
+        "recall": res["recall"],
+        "f1": res["f1"],
+        "roc_auc": res["roc_auc"],
+        "pr_auc": res["pr_auc"],
+        "limiar": res["limiar"],
+        "nome_completo": name
+    } for name, res in zip(final_model_names, final_test_results)],
+    probs_2m=final_y_probs,
+    y_test_2m=yTest,
+    financial_2m=financial_metrics_list,
+    data_10k=data_10k_res,
+    tuning_2m=df_tuning,
+)
+logger.info("Painéis comparativos gerados com sucesso:")
+logger.info("  -> 10_comparacao_10k_vs_2m_metricas.png")
+logger.info("  -> 11_comparacao_10k_vs_2m_resolucao_degrau.png")
+logger.info("  -> 12_comparacao_10k_vs_2m_curvas_pr_roc.png")
+logger.info("  -> 13_comparacao_10k_vs_2m_balanceamento.png")
+logger.info("  -> 14_comparacao_10k_vs_2m_escala_financeira.png")
+logger.info("\nTabela Resumo Comparativo 10k vs 2M:\n" + comp_table.to_string(index=False))
+logger.info("EXECUÇÃO COMPLETA: treinamentos, métricas e gráficos de 2M e 10k concluídos.")

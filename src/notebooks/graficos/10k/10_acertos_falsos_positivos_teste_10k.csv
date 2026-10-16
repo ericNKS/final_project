@@ -1,0 +1,4 @@
+Modelo,Acertos totais,Positivos corretos,Negativos corretos,Falsos positivos,Falsos negativos,Limiar
+XGBoost | SMOTE,1998,19,1979,1,1,0.3937256336212158
+Random Forest | SMOTE,1999,19,1980,0,1,0.4167778491973877
+Regressão Logística | Under-sampling,1988,8,1980,0,12,0.7272800794926297
