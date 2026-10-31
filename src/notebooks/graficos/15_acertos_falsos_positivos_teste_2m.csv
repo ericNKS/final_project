@@ -1,0 +1,4 @@
+Modelo,Acertos totais,Positivos corretos,Negativos corretos,Falsos positivos,Falsos negativos,Limiar
+XGBoost (Sem Reamostragem),398833,2481,396352,573,594,0.637703537940979
+Random Forest (Sem Reamostragem),398848,2388,396460,465,687,0.4747474789619446
+Regressão Logística (SMOTETomek),397668,2238,395430,1495,837,0.9595959595959596

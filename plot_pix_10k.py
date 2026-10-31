@@ -9,10 +9,10 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import seaborn as sns
+from src.utils.artifacts import savefig, atomic_image_save
 from sklearn.metrics import (f1_score,
                             precision_score, recall_score, confusion_matrix,
                             ConfusionMatrixDisplay, roc_curve, precision_recall_curve)
-from src.utils.logger import logger
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "src/notebooks/graficos/10k"
@@ -21,18 +21,18 @@ TABLES = ROOT / "resultados/10k"
 
 def save(number, name):
     plt.tight_layout()
-    plt.savefig(OUT / f"{number:02d}_{name}.png", dpi=150, bbox_inches="tight")
+    savefig(OUT / f"{number:02d}_{name}.png", dpi=150, bbox_inches="tight")
     plt.close()
-    logger.info(f"Salvo (10k): {OUT / f'{number:02d}_{name}.png'}")
+    print(f"Salvo: {number:02d}_{name}.png", flush=True)
 
 
-def generate_10k_plots(use_saved=True):
+def generate_10k_plots(use_saved=False):
     # Usa a cadeia de confiança do sistema sem desativar a validação TLS.
     import truststore
     truststore.inject_into_ssl()
     OUT.mkdir(parents=True, exist_ok=True)
     TABLES.mkdir(parents=True, exist_ok=True)
-    if use_saved and (TABLES / "predicoes_teste.csv").exists() and (TABLES / "metricas_teste.csv").exists():
+    if use_saved:
         metadata = json.loads((TABLES / "metadados.json").read_text(encoding="utf-8"))
         saved = pd.read_csv(TABLES / "predicoes_teste.csv")
         test = pd.read_csv(TABLES / "metricas_teste.csv")
@@ -146,16 +146,14 @@ def generate_10k_plots(use_saved=True):
     best = ns["bestVariant"]
     row = next(item for item in metrics if item["Variante"] == best)
     prob = predictions[best][0]
-    thresholds = np.linspace(.01, .99, 150)
-    plt.figure(figsize=(10, 6))
-    for label, metric in (("F1", f1_score), ("Precisão", precision_score), ("Recall", recall_score)):
-        plt.plot(thresholds, [metric(yt, prob >= t, zero_division=0) for t in thresholds], label=label)
-    plt.axvline(row["Limiar"], color="purple", linestyle="--", label=f"Limiar do treino: {row['Limiar']:.4f}")
-    plt.xlabel("Limiar de decisão")
-    plt.ylabel("Métrica")
-    plt.title(f"Dataset 10k: trade-off no teste — {best}")
-    plt.legend()
-    save(7, "tradeoff_limiar_metricas_teste_10k")
+    from src.visualization.model_diagnostics import plot_model_diagnostics
+    plot_model_diagnostics(
+        yt, {item["Variante"]: predictions[item["Variante"]][0] for item in metrics},
+        {item["Variante"]: predictions[item["Variante"]][1] for item in metrics},
+        {item["Variante"]: item["Limiar"] for item in metrics},
+        OUT, "Dataset 10k", "07_tradeoff_limiar_metricas_teste_10k.png",
+        "10_acertos_falsos_positivos_teste_10k.png",
+    )
 
     plt.figure(figsize=(10, 6))
     for cls, label, color in ((0, "Normal", "#16a34a"), (1, "Anomalia", "#dc2626")):
@@ -181,29 +179,20 @@ def generate_10k_plots(use_saved=True):
         "nota": "Variantes possuem hiperparâmetros diferentes; comparação não isola apenas balanceamento.",
         "metricas": mt.to_dict("records")}, indent=2, ensure_ascii=False), encoding="utf-8")
     from PIL import Image, ImageOps, ImageDraw
-    overview = Image.new("RGB", (1800, 1350), "white")
+    overview_paths = sorted(OUT.glob("*.png"))
+    overview = Image.new("RGB", (1800, 450 * int(np.ceil(len(overview_paths) / 3))), "white")
     draw = ImageDraw.Draw(overview)
-    for index, path in enumerate(sorted(OUT.glob("*.png"))):
+    for index, path in enumerate(overview_paths):
         x, top = (index % 3) * 600, (index // 3) * 450
         with Image.open(path) as source:
             thumbnail = ImageOps.contain(source, (590, 420))
             overview.paste(thumbnail, (x, top + 25))
         draw.text((x + 5, top + 5), path.name, fill="black")
-    overview.save(TABLES / "visao_geral.png")
-    logger.info(f"Visão geral salva: {TABLES / 'visao_geral.png'}")
-    logger.info("\n" + mt.to_string(index=False))
-    return {
-        "df_cv": df,
-        "df_test": mt,
-        "selected": selected,
-        "financial": money,
-        "predictions": predictions,
-        "yTest": yt,
-        "XTest": Xt,
-        "best": best
-    }
+    atomic_image_save(TABLES / "visao_geral.png", overview.save)
+    print(mt.to_string(index=False))
+    return {"metrics": metrics, "predictions": predictions, "y_test": yt,
+            "financial": money, "validation": df, "selected": selected}
 
 
 if __name__ == "__main__":
-    use_saved = "--saved" in sys.argv or "--no-saved" not in sys.argv
-    generate_10k_plots(use_saved=use_saved)
+    generate_10k_plots(use_saved="--saved" in sys.argv)

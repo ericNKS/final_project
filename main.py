@@ -1,5 +1,23 @@
 # %%
 import os
+import argparse
+parser = argparse.ArgumentParser(description="Treinamento e gráficos Pix")
+parser.add_argument("--reuse-10k-results", action="store_true", help="Recriar gráficos de 10k usando previsões salvas")
+args = parser.parse_args()
+training_backend = os.environ.get("TRAINING_BACKEND", "gpu")
+if training_backend not in {"gpu", "cpu"}:
+    raise ValueError("TRAINING_BACKEND deve ser gpu ou cpu")
+if training_backend == "gpu":
+    # Instalar antes de sklearn/imblearn também acelera os vizinhos de SMOTETomek.
+    try:
+        from cuml.accel import install
+    except ImportError as exc:
+        raise RuntimeError(
+            "O modo GPU requer cuML no WSL2. No PowerShell, execute ./run_gpu.ps1. "
+            "Para CPU explicitamente, defina TRAINING_BACKEND=cpu."
+        ) from exc
+    install(log_level="info")
+
 import json
 import time
 import numpy as np
@@ -28,12 +46,29 @@ from src.data.ingestion import (
 from src.data.cleaning import prepare2mDataset
 from src.models.xgboost import _getPipeline
 from src.utils.logger import setup_logging, logger
+from src.utils.artifacts import savefig
 
 os.makedirs("logs", exist_ok=True)
 os.makedirs("src/notebooks/graficos", exist_ok=True)
 os.makedirs("resultados/modelos", exist_ok=True)
 
 setup_logging()
+
+# O modo CPU precisa ser solicitado explicitamente com TRAINING_BACKEND=cpu.
+xgb_device = "cuda" if training_backend == "gpu" else "cpu"
+logger.info("Backend de treinamento: %s", training_backend)
+logger.info("Dispositivo solicitado para XGBoost: %s", xgb_device)
+if xgb_device.startswith("cuda"):
+    # Confirma CUDA antes de carregar o dataset; evita fallback silencioso para CPU.
+    gpu_probe = xgb.XGBClassifier(
+        tree_method="hist", device=xgb_device, n_estimators=1, max_depth=1
+    )
+    gpu_probe.fit(np.array([[0.], [1.], [2.], [3.]]), np.array([0, 0, 1, 1]))
+    active_device = json.loads(gpu_probe.get_booster().save_config())["learner"]["generic_param"]["device"]
+    if not active_device.startswith("cuda"):
+        raise RuntimeError("CUDA indisponível no XGBoost. Verifique a instalação e o driver NVIDIA.")
+    logger.info("CUDA confirmado pelo XGBoost: %s", active_device)
+    del gpu_probe
 
 # %%
 """
@@ -45,29 +80,90 @@ Utilizando exclusivamente o dataset de 2M transações reais de Pix:
 - Teste Independente: 20% (400.000 transações) para verificação do desempenho real
 - Amostra de Tunagem: 80.000 transações estratificadas para testes rápidos de hiperparâmetros
 """
+
 logger.info("=" * 80)
 logger.info("ETAPA 1: CARREGAMENTO E DIVISÃO DO DATASET DE 2M PIX")
 logger.info("=" * 80)
 
 t0 = time.time()
 df_raw = loadFraud2mData()
-logger.info(f"Dataset de 2M carregado em {time.time()-t0:.2f}s | Linhas: {len(df_raw):,}")
+logger.info(
+    f"Dataset de 2M carregado em {time.time()-t0:.2f}s "
+    f"| Linhas: {len(df_raw):,}"
+)
 
 X, y = prepare2mDataset(df_raw)
-logger.info(f"Dataset preparado | X shape: {X.shape} | Fraudes totais: {y.sum():,} ({y.mean()*100:.2f}%)")
 
+logger.info(
+    f"Dataset preparado | X shape: {X.shape} "
+    f"| Fraudes totais: {y.sum():,} ({y.mean()*100:.2f}%)"
+)
+
+# 1. Separação inicial: 80% desenvolvimento e 20% teste
 XTrain, XTest, yTrain, yTest = train_test_split(
-    X, y, test_size=0.2, stratify=y, random_state=42
+    X,
+    y,
+    test_size=0.2,
+    stratify=y,
+    random_state=42
 )
-logger.info(f"XTrain (80% treino): {XTrain.shape} | Fraudes: {yTrain.sum():,} ({yTrain.mean()*100:.2f}%)")
-logger.info(f"XTest  (20% teste):  {XTest.shape}  | Fraudes: {yTest.sum():,}  ({yTest.mean()*100:.2f}%)")
 
-# Extração da amostra representativa estratificada para testes de hiperparâmetros
-XSample, ySample = getTuningSample(XTrain, yTrain, sample_size=80000, random_state=42)
-XSubTrain, XSubVal, ySubTrain, ySubVal = train_test_split(
-    XSample, ySample, test_size=0.25, stratify=ySample, random_state=42
+# 2. Separação dos dados de desenvolvimento:
+# 70% do total para treinamento
+# 10% do total para validação independente
+XTrainFinal, XVal, yTrainFinal, yVal = train_test_split(
+    XTrain,
+    yTrain,
+    test_size=0.125,
+    stratify=yTrain,
+    random_state=42
 )
-logger.info(f"Amostra de Tunagem: {XSample.shape} (SubTreino: {XSubTrain.shape}, SubVal: {XSubVal.shape})")
+
+logger.info(
+    f"Treinamento (70%): {XTrainFinal.shape} "
+    f"| Fraudes: {yTrainFinal.sum():,} "
+    f"({yTrainFinal.mean()*100:.2f}%)"
+)
+
+logger.info(
+    f"Validação (10%): {XVal.shape} "
+    f"| Fraudes: {yVal.sum():,} "
+    f"({yVal.mean()*100:.2f}%)"
+)
+
+logger.info(
+    f"Teste (20%): {XTest.shape} "
+    f"| Fraudes: {yTest.sum():,} "
+    f"({yTest.mean()*100:.2f}%)"
+)
+
+# 3. Extração de 80 mil registros exclusivamente do treinamento
+XSample, ySample = getTuningSample(
+    XTrainFinal,
+    yTrainFinal,
+    sample_size=80000,
+    random_state=42
+)
+
+# 4. Divisão da amostra para comparar configurações
+XSubTrain, XSubVal, ySubTrain, ySubVal = train_test_split(
+    XSample,
+    ySample,
+    test_size=0.25,
+    stratify=ySample,
+    random_state=42
+)
+
+logger.info(
+    f"Amostra de Tunagem: {XSample.shape} "
+    f"(SubTreino: {XSubTrain.shape}, "
+    f"SubVal: {XSubVal.shape})"
+)
+
+
+
+
+
 
 # %%
 """
@@ -224,6 +320,13 @@ experiments.append({
     "clf": LogisticRegression(C=0.1, max_iter=1000, random_state=42)
 })
 
+for exp in experiments:
+    if isinstance(exp["clf"], xgb.XGBClassifier):
+        exp["clf"].set_params(device=xgb_device)
+    elif training_backend == "gpu":
+        from src.models.gpu import GPUClassifier
+        exp["clf"] = GPUClassifier(exp["clf"])
+
 results_list = []
 
 for idx, exp in enumerate(experiments):
@@ -317,7 +420,7 @@ axes[2].grid(axis="y", linestyle="--", alpha=0.5)
 
 plt.suptitle("AGRUPAMENTO POR MODELOS: Comparação Geral de Desempenho", fontsize=15, fontweight="bold", y=1.03)
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/01_comparacao_por_modelo.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/01_comparacao_por_modelo.png", dpi=150, bbox_inches="tight")
 plt.close()
 logger.info("Salvo: src/notebooks/graficos/01_comparacao_por_modelo.png")
 
@@ -344,7 +447,7 @@ ax.grid(axis="y", linestyle="--", alpha=0.5)
 ax.legend(title="Estratégia de Limiar", loc="upper left", frameon=True)
 
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/02_impacto_por_tunagem.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/02_impacto_por_tunagem.png", dpi=150, bbox_inches="tight")
 plt.close()
 logger.info("Salvo: src/notebooks/graficos/02_impacto_por_tunagem.png")
 
@@ -366,7 +469,7 @@ for i, m_name in enumerate(models_order):
 
 plt.suptitle("AGRUPAMENTO POR TUNAGEM E BALANCEAMENTO: Cruzamento entre Reamostragem e Hiperparâmetros", fontsize=14, fontweight="bold", y=1.03)
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/03_tunagem_por_balanceamento.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/03_tunagem_por_balanceamento.png", dpi=150, bbox_inches="tight")
 plt.close()
 logger.info("Salvo: src/notebooks/graficos/03_tunagem_por_balanceamento.png")
 
@@ -406,12 +509,12 @@ for m_name in models_order:
         numeric_transformer=cfg["numeric_trans"]
     )
     t_start = time.time()
-    pipe_final.fit(XTrain, yTrain)
+    pipe_final.fit(XTrainFinal, yTrainFinal)
     logger.info(f"  -> Treinamento em 1.6M concluído em {time.time()-t_start:.2f}s")
 
     logger.info("  -> Calibrando limiar ótimo de decisão na partição de validação...")
     tuned_final = TunedThresholdClassifierCV(pipe_final, scoring="f1", cv="prefit", refit=False)
-    tuned_final.fit(XSubVal, ySubVal)
+    tuned_final.fit(XVal, yVal)
     logger.info(f"  -> Limiar ótimo calibrado: {tuned_final.best_threshold_:.4f}")
 
     t_start = time.time()
@@ -538,7 +641,7 @@ for idx, (name, res) in enumerate(zip(final_model_names, final_test_results)):
 
 plt.suptitle("TESTE NO DATASET INDEPENDENTE (400k): Matrizes de Confusão", fontsize=14, fontweight="bold", y=1.05)
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/04_matrizes_confusao_teste_2m.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/04_matrizes_confusao_teste_2m.png", dpi=150, bbox_inches="tight")
 plt.close()
 logger.info("Salvo: src/notebooks/graficos/04_matrizes_confusao_teste_2m.png")
 
@@ -558,7 +661,7 @@ plt.ylabel("Taxa de Verdadeiros Positivos (TPR / Recall)", fontweight="bold")
 plt.grid(True, linestyle="--", alpha=0.5)
 plt.legend(loc="lower right", fontsize=10, frameon=True)
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/05_curvas_roc_teste_2m.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/05_curvas_roc_teste_2m.png", dpi=150, bbox_inches="tight")
 plt.close()
 logger.info("Salvo: src/notebooks/graficos/05_curvas_roc_teste_2m.png")
 
@@ -584,40 +687,30 @@ plt.ylabel("Precision (Taxa de Acerto nas Suspeitas)", fontweight="bold")
 plt.grid(True, linestyle="--", alpha=0.5)
 plt.legend(loc="upper right", fontsize=9, frameon=True)
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/06_curvas_precision_recall_teste_2m.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/06_curvas_precision_recall_teste_2m.png", dpi=150, bbox_inches="tight")
 plt.close()
 logger.info("Salvo: src/notebooks/graficos/06_curvas_precision_recall_teste_2m.png")
 
-# --- Gráfico 7: Trade-off Limiar vs Métricas no Teste (Melhor Modelo: XGBoost) ---
+# Preserva probabilidades para novos gráficos sem repetir o treinamento.
+pd.DataFrame({
+    "classe_real": np.asarray(yTest),
+    **{name + "_prob": probs for name, probs in final_y_probs.items()},
+    **{name + "_pred": preds for name, preds in final_y_preds.items()},
+}).to_parquet("resultados/tabelas/predicoes_teste_2m.parquet", index=False)
+
+# --- Gráfico 7: trade-off dos três modelos finais e contagens de acertos ---
+from src.visualization.model_diagnostics import plot_model_diagnostics
+plot_model_diagnostics(
+    yTest, final_y_probs, final_y_preds,
+    {name: res["limiar"] for name, res in zip(final_model_names, final_test_results)},
+    "src/notebooks/graficos", "Dataset 2M",
+    "07_tradeoff_limiar_metricas_teste_2m.png",
+    "15_acertos_falsos_positivos_teste_2m.png",
+)
+logger.info("Salvos: trade-off de todos os modelos e contagens de acertos/falsos positivos (2M)")
 best_name = final_model_names[0]
 best_probs = final_y_probs[best_name]
 best_limiar = final_test_results[0]["limiar"]
-
-thresholds_range = np.linspace(0.01, 0.99, 150)
-f1_curve, prec_curve, rec_curve = [], [], []
-
-for t_val in thresholds_range:
-    y_temp = (best_probs >= t_val).astype(int)
-    f1_curve.append(f1_score(yTest, y_temp, zero_division=0))
-    prec_curve.append(precision_score(yTest, y_temp, zero_division=0))
-    rec_curve.append(recall_score(yTest, y_temp, zero_division=0))
-
-plt.figure(figsize=(10, 6))
-plt.plot(thresholds_range, f1_curve, label="F1-Score", color="#2563eb", linewidth=2.5)
-plt.plot(thresholds_range, prec_curve, label="Precision", color="#16a34a", linewidth=2.0)
-plt.plot(thresholds_range, rec_curve, label="Recall", color="#dc2626", linewidth=2.0)
-plt.axvline(x=best_limiar, color="purple", linestyle="--", linewidth=2, label=f"Limiar Otimizado ({best_limiar:.4f})")
-plt.scatter(best_limiar, final_test_results[0]["f1"], color="purple", s=100, zorder=5, label=f"F1 Máximo = {final_test_results[0]['f1']*100:.1f}%")
-
-plt.title(f"TESTE NO DATASET INDEPENDENTE (400k): Trade-off Limiar vs Métricas ({best_name})", fontsize=13, fontweight="bold", pad=15)
-plt.xlabel("Limiar de Decisão de Fraude (Probability Threshold)", fontweight="bold")
-plt.ylabel("Pontuação da Métrica", fontweight="bold")
-plt.grid(True, linestyle="--", alpha=0.5)
-plt.legend(loc="center left", frameon=True)
-plt.tight_layout()
-plt.savefig("src/notebooks/graficos/07_tradeoff_limiar_metricas_teste_2m.png", dpi=150, bbox_inches="tight")
-plt.close()
-logger.info("Salvo: src/notebooks/graficos/07_tradeoff_limiar_metricas_teste_2m.png")
 
 # --- Gráfico 8: Distribuição de Densidade das Probabilidades Preditas no Teste ---
 plt.figure(figsize=(10, 6))
@@ -631,7 +724,7 @@ plt.ylabel("Densidade de Frequência", fontweight="bold")
 plt.grid(True, linestyle="--", alpha=0.5)
 plt.legend(loc="upper center", frameon=True)
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/08_distribuicao_probabilidades_teste_2m.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/08_distribuicao_probabilidades_teste_2m.png", dpi=150, bbox_inches="tight")
 plt.close()
 logger.info("Salvo: src/notebooks/graficos/08_distribuicao_probabilidades_teste_2m.png")
 
@@ -664,7 +757,7 @@ for bar in b2:
                 ha='center', va='bottom', color='black', fontweight='bold', fontsize=9)
 
 plt.tight_layout()
-plt.savefig("src/notebooks/graficos/09_impacto_financeiro_teste_2m.png", dpi=150, bbox_inches="tight")
+savefig("src/notebooks/graficos/09_impacto_financeiro_teste_2m.png", dpi=150, bbox_inches="tight")
 plt.close()
 logger.info("Salvo: src/notebooks/graficos/09_impacto_financeiro_teste_2m.png")
 
@@ -728,7 +821,7 @@ logger.info("ETAPA 7: PROCESSAMENTO E GERAÇÃO DOS GRÁFICOS DO DATASET DE 10K 
 logger.info("=" * 80)
 
 from plot_pix_10k import generate_10k_plots
-data_10k_res = generate_10k_plots(use_saved=True)
+data_10k_res = generate_10k_plots(use_saved=args.reuse_10k_results)
 logger.info("Gráficos do dataset de 10k gerados com sucesso em: src/notebooks/graficos/10k/")
 
 # %%
@@ -762,7 +855,9 @@ comp_table = generate_comparison_plots(
     } for name, res in zip(final_model_names, final_test_results)],
     probs_2m=final_y_probs,
     y_test_2m=yTest,
-    financial_2m=financial_metrics_list
+    financial_2m=financial_metrics_list,
+    data_10k=data_10k_res,
+    tuning_2m=df_tuning,
 )
 logger.info("Painéis comparativos gerados com sucesso:")
 logger.info("  -> 10_comparacao_10k_vs_2m_metricas.png")
@@ -771,4 +866,4 @@ logger.info("  -> 12_comparacao_10k_vs_2m_curvas_pr_roc.png")
 logger.info("  -> 13_comparacao_10k_vs_2m_balanceamento.png")
 logger.info("  -> 14_comparacao_10k_vs_2m_escala_financeira.png")
 logger.info("\nTabela Resumo Comparativo 10k vs 2M:\n" + comp_table.to_string(index=False))
-
+logger.info("EXECUÇÃO COMPLETA: treinamentos, métricas e gráficos de 2M e 10k concluídos.")

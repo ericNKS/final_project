@@ -350,6 +350,16 @@ def default_f1(estimator, X, y):
 
 comparisonScoring = {**scoring, 'PR_AUC': 'average_precision', 'ROC_AUC': 'roc_auc',
                      'F1_Tunado': 'f1', 'F1_Padrao': default_f1}
+import os
+if os.environ.get("TRAINING_BACKEND") == "gpu":
+    from src.models.gpu import GPUClassifier
+    for pipeline in modelPipelines.values():
+        estimator = pipeline.named_steps['classifier']
+        if isinstance(estimator, xgb.XGBClassifier):
+            estimator.set_params(device="cuda")
+        else:
+            pipeline.set_params(classifier=GPUClassifier(estimator))
+
 comparisonRows, testRows = [], []
 fittedModels, testPredictions = {}, {}
 for label, pipeline in modelPipelines.items():

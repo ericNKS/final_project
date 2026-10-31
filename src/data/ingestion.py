@@ -3,6 +3,8 @@ import joblib
 import kagglehub
 import pandas as pd
 import logging
+import os
+import tempfile
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 
@@ -123,11 +125,25 @@ def saveModelArtifact(model, metadata: dict, filepath: str = "resultados/modelos
     path = Path(filepath)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    joblib.dump(model, path)
+    # Escreve em arquivo novo e só então substitui o anterior (também no WSL/NTFS).
+    with tempfile.NamedTemporaryFile(dir=path.parent, suffix=".joblib", delete=False) as temp:
+        temp_path = Path(temp.name)
+    try:
+        joblib.dump(model, temp_path)
+        os.replace(temp_path, path)
+    finally:
+        temp_path.unlink(missing_ok=True)
     meta_path = path.with_suffix(".json")
-    meta_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False), encoding="utf-8")
-    logger.info(f"Modelo salvo com sucesso em: {path}")
-    logger.info(f"Metadados salvos em: {meta_path}")
+    with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                     suffix=".json", delete=False) as temp:
+        meta_temp = Path(temp.name)
+        temp.write(json.dumps(metadata, indent=2, ensure_ascii=False))
+    try:
+        os.replace(meta_temp, meta_path)
+    finally:
+        meta_temp.unlink(missing_ok=True)
+    print(f"\nModelo salvo com sucesso em: {path}")
+    print(f"Metadados salvos em: {meta_path}")
 
 
 def printTrainResult(modelNames, *results):
@@ -155,7 +171,7 @@ def printTrainResult(modelNames, *results):
         ]
     })
 
-    logger.info("Resultados de Treinamento:\n%s", modelResults)
+    print(modelResults)
 
 
 def printTestResult(modelNames, *results):
@@ -188,4 +204,4 @@ def printTestResult(modelNames, *results):
         ]
     })
 
-    logger.info("Resultados no Conjunto de Teste:\n%s", modelResults)
+    print(modelResults)
