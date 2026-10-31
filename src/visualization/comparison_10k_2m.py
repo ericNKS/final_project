@@ -10,7 +10,7 @@ from sklearn.metrics import precision_recall_curve, roc_curve
 from src.utils.artifacts import savefig
 
 logger = logging.getLogger(__name__)
-OUT = Path(__file__).resolve().parents[1] / "notebooks/graficos"
+OUT = Path(__file__).resolve().parents[2] / "resultados/graficos"
 
 
 def generate_comparison_plots(metrics_2m, probs_2m, y_test_2m, financial_2m,
@@ -99,5 +99,7 @@ def generate_comparison_plots(metrics_2m, probs_2m, y_test_2m, financial_2m,
         ax.legend(fontsize=8)
     fig.suptitle("Escala financeira por dataset — anomalia sintética não equivale a prejuízo")
     save("14_comparacao_10k_vs_2m_escala_financeira.png")
-    table.to_csv(OUT.parents[2] / "resultados/tabelas/comparacao_10k_2m.csv", index=False)
+    tables = OUT.parent / "tabelas"
+    tables.mkdir(parents=True, exist_ok=True)
+    table.to_csv(tables / "comparacao_10k_2m.csv", index=False)
     return table

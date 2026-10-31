@@ -49,7 +49,7 @@ from src.utils.logger import setup_logging, logger
 from src.utils.artifacts import savefig
 
 os.makedirs("logs", exist_ok=True)
-os.makedirs("src/notebooks/graficos", exist_ok=True)
+os.makedirs("resultados/graficos", exist_ok=True)
 os.makedirs("resultados/modelos", exist_ok=True)
 
 setup_logging()
@@ -420,9 +420,9 @@ axes[2].grid(axis="y", linestyle="--", alpha=0.5)
 
 plt.suptitle("AGRUPAMENTO POR MODELOS: Comparação Geral de Desempenho", fontsize=15, fontweight="bold", y=1.03)
 plt.tight_layout()
-savefig("src/notebooks/graficos/01_comparacao_por_modelo.png", dpi=150, bbox_inches="tight")
+savefig("resultados/graficos/01_comparacao_por_modelo.png", dpi=150, bbox_inches="tight")
 plt.close()
-logger.info("Salvo: src/notebooks/graficos/01_comparacao_por_modelo.png")
+logger.info("Salvo: resultados/graficos/01_comparacao_por_modelo.png")
 
 # --- Gráfico 2: Agrupamento por Tunagem (Impacto da Calibração do Limiar) ---
 fig, ax = plt.subplots(figsize=(20, 8))
@@ -447,9 +447,9 @@ ax.grid(axis="y", linestyle="--", alpha=0.5)
 ax.legend(title="Estratégia de Limiar", loc="upper left", frameon=True)
 
 plt.tight_layout()
-savefig("src/notebooks/graficos/02_impacto_por_tunagem.png", dpi=150, bbox_inches="tight")
+savefig("resultados/graficos/02_impacto_por_tunagem.png", dpi=150, bbox_inches="tight")
 plt.close()
-logger.info("Salvo: src/notebooks/graficos/02_impacto_por_tunagem.png")
+logger.info("Salvo: resultados/graficos/02_impacto_por_tunagem.png")
 
 # --- Gráfico 3: Agrupamento por Tunagem e Balanceamento ---
 fig, axes = plt.subplots(1, 3, figsize=(20, 6), sharey=True)
@@ -469,9 +469,9 @@ for i, m_name in enumerate(models_order):
 
 plt.suptitle("AGRUPAMENTO POR TUNAGEM E BALANCEAMENTO: Cruzamento entre Reamostragem e Hiperparâmetros", fontsize=14, fontweight="bold", y=1.03)
 plt.tight_layout()
-savefig("src/notebooks/graficos/03_tunagem_por_balanceamento.png", dpi=150, bbox_inches="tight")
+savefig("resultados/graficos/03_tunagem_por_balanceamento.png", dpi=150, bbox_inches="tight")
 plt.close()
-logger.info("Salvo: src/notebooks/graficos/03_tunagem_por_balanceamento.png")
+logger.info("Salvo: resultados/graficos/03_tunagem_por_balanceamento.png")
 
 # %%
 """
@@ -641,9 +641,9 @@ for idx, (name, res) in enumerate(zip(final_model_names, final_test_results)):
 
 plt.suptitle("TESTE NO DATASET INDEPENDENTE (400k): Matrizes de Confusão", fontsize=14, fontweight="bold", y=1.05)
 plt.tight_layout()
-savefig("src/notebooks/graficos/04_matrizes_confusao_teste_2m.png", dpi=150, bbox_inches="tight")
+savefig("resultados/graficos/04_matrizes_confusao_teste_2m.png", dpi=150, bbox_inches="tight")
 plt.close()
-logger.info("Salvo: src/notebooks/graficos/04_matrizes_confusao_teste_2m.png")
+logger.info("Salvo: resultados/graficos/04_matrizes_confusao_teste_2m.png")
 
 # --- Gráfico 5: Curvas ROC no Teste Independente ---
 plt.figure(figsize=(9, 7))
@@ -661,9 +661,9 @@ plt.ylabel("Taxa de Verdadeiros Positivos (TPR / Recall)", fontweight="bold")
 plt.grid(True, linestyle="--", alpha=0.5)
 plt.legend(loc="lower right", fontsize=10, frameon=True)
 plt.tight_layout()
-savefig("src/notebooks/graficos/05_curvas_roc_teste_2m.png", dpi=150, bbox_inches="tight")
+savefig("resultados/graficos/05_curvas_roc_teste_2m.png", dpi=150, bbox_inches="tight")
 plt.close()
-logger.info("Salvo: src/notebooks/graficos/05_curvas_roc_teste_2m.png")
+logger.info("Salvo: resultados/graficos/05_curvas_roc_teste_2m.png")
 
 # --- Gráfico 6: Curvas Precision-Recall no Teste Independente ---
 plt.figure(figsize=(9, 7))
@@ -687,9 +687,9 @@ plt.ylabel("Precision (Taxa de Acerto nas Suspeitas)", fontweight="bold")
 plt.grid(True, linestyle="--", alpha=0.5)
 plt.legend(loc="upper right", fontsize=9, frameon=True)
 plt.tight_layout()
-savefig("src/notebooks/graficos/06_curvas_precision_recall_teste_2m.png", dpi=150, bbox_inches="tight")
+savefig("resultados/graficos/06_curvas_precision_recall_teste_2m.png", dpi=150, bbox_inches="tight")
 plt.close()
-logger.info("Salvo: src/notebooks/graficos/06_curvas_precision_recall_teste_2m.png")
+logger.info("Salvo: resultados/graficos/06_curvas_precision_recall_teste_2m.png")
 
 # Preserva probabilidades para novos gráficos sem repetir o treinamento.
 pd.DataFrame({
@@ -703,7 +703,7 @@ from src.visualization.model_diagnostics import plot_model_diagnostics
 plot_model_diagnostics(
     yTest, final_y_probs, final_y_preds,
     {name: res["limiar"] for name, res in zip(final_model_names, final_test_results)},
-    "src/notebooks/graficos", "Dataset 2M",
+    "resultados/graficos", "Dataset 2M",
     "07_tradeoff_limiar_metricas_teste_2m.png",
     "15_acertos_falsos_positivos_teste_2m.png",
 )
@@ -724,9 +724,9 @@ plt.ylabel("Densidade de Frequência", fontweight="bold")
 plt.grid(True, linestyle="--", alpha=0.5)
 plt.legend(loc="upper center", frameon=True)
 plt.tight_layout()
-savefig("src/notebooks/graficos/08_distribuicao_probabilidades_teste_2m.png", dpi=150, bbox_inches="tight")
+savefig("resultados/graficos/08_distribuicao_probabilidades_teste_2m.png", dpi=150, bbox_inches="tight")
 plt.close()
-logger.info("Salvo: src/notebooks/graficos/08_distribuicao_probabilidades_teste_2m.png")
+logger.info("Salvo: resultados/graficos/08_distribuicao_probabilidades_teste_2m.png")
 
 # --- Gráfico 9: Impacto Financeiro no Conjunto de Teste ---
 fig, ax = plt.subplots(figsize=(12, 6))
@@ -757,9 +757,9 @@ for bar in b2:
                 ha='center', va='bottom', color='black', fontweight='bold', fontsize=9)
 
 plt.tight_layout()
-savefig("src/notebooks/graficos/09_impacto_financeiro_teste_2m.png", dpi=150, bbox_inches="tight")
+savefig("resultados/graficos/09_impacto_financeiro_teste_2m.png", dpi=150, bbox_inches="tight")
 plt.close()
-logger.info("Salvo: src/notebooks/graficos/09_impacto_financeiro_teste_2m.png")
+logger.info("Salvo: resultados/graficos/09_impacto_financeiro_teste_2m.png")
 
 # %%
 """
@@ -814,7 +814,7 @@ saveModelArtifact(best_pipeline, model_metadata, filepath="resultados/modelos/me
 ETAPA 7: PROCESSAMENTO E GERAÇÃO DOS GRÁFICOS DO DATASET DE 10K PIX
 ================================================================================
 Gera todos os 9 gráficos individuais do dataset de 10k (anomalias cadastrais sintéticas)
-em 'src/notebooks/graficos/10k/' e o painel consolidado em 'resultados/10k/visao_geral.png'.
+em 'resultados/graficos/10k/' e o painel consolidado em 'resultados/10k/visao_geral.png'.
 """
 logger.info("=" * 80)
 logger.info("ETAPA 7: PROCESSAMENTO E GERAÇÃO DOS GRÁFICOS DO DATASET DE 10K PIX")
@@ -822,14 +822,14 @@ logger.info("=" * 80)
 
 from plot_pix_10k import generate_10k_plots
 data_10k_res = generate_10k_plots(use_saved=args.reuse_10k_results)
-logger.info("Gráficos do dataset de 10k gerados com sucesso em: src/notebooks/graficos/10k/")
+logger.info("Gráficos do dataset de 10k gerados com sucesso em: resultados/graficos/10k/")
 
 # %%
 """
 ================================================================================
 ETAPA 8: COMPARAÇÃO ESTRUTURAL ENTRE DATASET PEQUENO (10K) E GRANDE (2M)
 ================================================================================
-Gera os gráficos comparativos diretos lado a lado (10 a 14) em 'src/notebooks/graficos/':
+Gera os gráficos comparativos diretos lado a lado (10 a 14) em 'resultados/graficos/':
 - 10_comparacao_10k_vs_2m_metricas.png: F1, Precision, Recall, PR-AUC, ROC-AUC lado a lado
 - 11_comparacao_10k_vs_2m_resolucao_degrau.png: Resolução estatística (5% por erro no 10k vs 0.0325% no 2M)
 - 12_comparacao_10k_vs_2m_curvas_pr_roc.png: Painel 2x2 com Curvas ROC e PR e limiares de prevalência

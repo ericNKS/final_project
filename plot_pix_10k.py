@@ -15,7 +15,7 @@ from sklearn.metrics import (f1_score,
                             ConfusionMatrixDisplay, roc_curve, precision_recall_curve)
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "src/notebooks/graficos/10k"
+OUT = ROOT / "resultados/graficos/10k"
 TABLES = ROOT / "resultados/10k"
 
 

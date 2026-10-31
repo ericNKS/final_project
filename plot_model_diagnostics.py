@@ -10,7 +10,7 @@ from src.visualization.model_diagnostics import plot_model_diagnostics
 
 def main():
     root = Path(__file__).resolve().parent
-    output = root / "src/notebooks/graficos"
+    output = root / "resultados/graficos"
     for dataset in ("2m", "10k"):
         if dataset == "2m":
             folder = root / "resultados/tabelas"
