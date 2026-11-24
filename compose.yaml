@@ -1,0 +1,54 @@
+services:
+  db:
+    image: docker.io/library/postgres:18
+    container_name: tcc_db
+    environment: &postgres_environment
+      POSTGRES_USER: ${POSTGRES_USER:-pix}
+      POSTGRES_DB: ${POSTGRES_DB:-pix}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pix}
+    ports:
+      - "[::1]:5432:5432"
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pix_postgres:/var/lib/postgresql
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      args:
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
+    image: tcc-pix:local
+    userns_mode: ${APP_USERNS:-host}
+    environment:
+      <<: *postgres_environment
+      DATABASE_HOST: db
+      TRAINING_BACKEND: gpu
+      PAYER_HMAC_KEY: ${PAYER_HMAC_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "[::1]:8000:8000"
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./resultados:/app/resultados
+      - ./data:/app/data:ro
+      - ./.cache:/home/app/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+volumes:
+  pix_postgres:

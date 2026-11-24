@@ -1,0 +1,291 @@
+{
+  "contract_version": 1,
+  "scenario": "2m",
+  "run_id": "20261123T225557_ac994bc3",
+  "backend": "gpu",
+  "hardware": {
+    "device": 0,
+    "name": "NVIDIA T1200 Laptop GPU",
+    "compute_capability": "7.5",
+    "total_vram_bytes": 3910533120,
+    "free_vram_at_start_bytes": 3813408768,
+    "cuda_runtime": 13020,
+    "allocator": "shared_rmm_cuda_without_retained_pool",
+    "cupy": "14.2.0",
+    "cudf": "26.10.00",
+    "cuml": "26.10.00"
+  },
+  "versions": {
+    "numpy": "2.4.6",
+    "pandas": "3.0.6",
+    "scikit-learn": "1.9.1",
+    "imbalanced-learn": "0.14.2",
+    "xgboost": "3.4.1",
+    "joblib": "1.6.0",
+    "cupy-cuda13x": "14.2.0",
+    "cuml-cu13": "26.10.0",
+    "cudf-cu13": "26.10.0",
+    "rmm-cu13": "26.10.0"
+  },
+  "features": [
+    "tipo_transacao",
+    "amount",
+    "saldo_anterior_pagador",
+    "saldo_anterior_recebedor",
+    "hora",
+    "dia_semana",
+    "dia_util",
+    "horario_noturno",
+    "acima_limite_noturno",
+    "qtd_transacoes_pagador",
+    "media_valor_pagador",
+    "mediana_valor_pagador"
+  ],
+  "execution": {
+    "feature_engineering": "cudf/cupy CUDA",
+    "metrics_and_threshold": "cupy CUDA",
+    "input_validation_io_and_charts": "CPU"
+  },
+  "champion": "xgboost",
+  "selection": "temporal_validation_average_precision",
+  "threshold_objective": "calibration_f1",
+  "partitions": {
+    "development": {
+      "rows": 1396047,
+      "start": "2024-01-01T03:00:00+00:00",
+      "end": "2024-01-14T15:00:00+00:00",
+      "classes": {
+        "0": 1389164,
+        "1": 6883
+      }
+    },
+    "calibration": {
+      "rows": 203777,
+      "start": "2024-01-14T16:00:00+00:00",
+      "end": "2024-01-16T02:00:00+00:00",
+      "classes": {
+        "0": 203076,
+        "1": 701
+      }
+    },
+    "test": {
+      "rows": 400176,
+      "start": "2024-01-16T03:00:00+00:00",
+      "end": "2024-02-01T02:59:59+00:00",
+      "classes": {
+        "0": 392384,
+        "1": 7792
+      }
+    }
+  },
+  "tuning_rows": 89591,
+  "models": {
+    "logistic_regression": {
+      "artifact": "logistic_regression.joblib",
+      "sha256": "197d93befe03692abbd2af1b94fecf5310426ce6c87e4c0caa1ff05a3d9c5343",
+      "candidate": "logistic_regression__smotenc_tomek__default",
+      "strategy": "smotenc_tomek",
+      "validation_ap": 0.6565677703041563,
+      "threshold": 0.9512766599655151,
+      "calibration_default": {
+        "accuracy": 0.9690985734405747,
+        "precision": 0.09787295199770049,
+        "recall": 0.9714693295292439,
+        "f1": 0.17783000391696044,
+        "average_precision": 0.3459319626044946,
+        "roc_auc": 0.9917264729515683,
+        "tn": 196799,
+        "fp": 6277,
+        "fn": 20,
+        "tp": 681
+      },
+      "calibration_tuned": {
+        "accuracy": 0.9948325866020208,
+        "precision": 0.36075949367088606,
+        "recall": 0.6504992867332382,
+        "f1": 0.46412213740458014,
+        "average_precision": 0.3459319626044946,
+        "roc_auc": 0.9917264729515683,
+        "tn": 202268,
+        "fp": 808,
+        "fn": 245,
+        "tp": 456
+      },
+      "execution": {
+        "prepare": "cupy/cudf CUDA",
+        "encode": "cupy CUDA",
+        "resampling": "cupy/cuml CUDA",
+        "tomek": "cuml/cupy CUDA",
+        "classifier": "cuml CUDA",
+        "classifier_parameters": {
+          "verbose": false,
+          "output_type": "cupy",
+          "penalty": "l2",
+          "tol": 0.0001,
+          "C": 1.0,
+          "fit_intercept": true,
+          "class_weight": null,
+          "max_iter": 2000,
+          "linesearch_max_iter": 50,
+          "l1_ratio": null,
+          "solver": "qn",
+          "lbfgs_memory": 5,
+          "penalty_normalized": true
+        }
+      }
+    },
+    "random_forest": {
+      "artifact": "random_forest.joblib",
+      "sha256": "5ebb0ad42711db124519b6f1c95c2de53124cb4f063f79c278acecd6fa24282d",
+      "candidate": "random_forest__original__adjusted",
+      "strategy": "original",
+      "validation_ap": 0.6056457866570759,
+      "threshold": 0.2862546741962433,
+      "calibration_default": {
+        "accuracy": 0.997516893466878,
+        "precision": 0.870722433460076,
+        "recall": 0.32667617689015693,
+        "f1": 0.475103734439834,
+        "average_precision": 0.6262628192574837,
+        "roc_auc": 0.988658276646686,
+        "tn": 203042,
+        "fp": 34,
+        "fn": 472,
+        "tp": 229
+      },
+      "calibration_tuned": {
+        "accuracy": 0.9969819950239723,
+        "precision": 0.5545685279187818,
+        "recall": 0.62339514978602,
+        "f1": 0.5869711215580927,
+        "average_precision": 0.6262628192574837,
+        "roc_auc": 0.988658276646686,
+        "tn": 202725,
+        "fp": 351,
+        "fn": 264,
+        "tp": 437
+      },
+      "execution": {
+        "prepare": "cupy/cudf CUDA",
+        "encode": "cupy CUDA",
+        "resampling": "not_requested",
+        "tomek": "not_requested",
+        "classifier": "cuml CUDA",
+        "classifier_parameters": {
+          "verbose": false,
+          "output_type": "cupy",
+          "split_criterion": "gini",
+          "n_estimators": 100,
+          "bootstrap": true,
+          "max_samples": 1.0,
+          "max_depth": 12,
+          "max_leaves": -1,
+          "max_features": "sqrt",
+          "n_bins": 128,
+          "min_samples_leaf": 2,
+          "min_samples_split": 2,
+          "min_impurity_decrease": 0.0,
+          "max_batch_size": 4096,
+          "random_state": 42,
+          "n_streams": 1,
+          "oob_score": false,
+          "class_weight": null
+        }
+      }
+    },
+    "xgboost": {
+      "artifact": "xgboost.joblib",
+      "sha256": "09f0dcbd3af16053b6233172ea9eae84ec4584d383905be42631471cdf1f96c7",
+      "candidate": "xgboost__original__adjusted",
+      "strategy": "original",
+      "validation_ap": 0.7748053400170908,
+      "threshold": 0.3802414536476135,
+      "calibration_default": {
+        "accuracy": 0.9978456842528843,
+        "precision": 0.7282229965156795,
+        "recall": 0.5962910128388017,
+        "f1": 0.6556862745098039,
+        "average_precision": 0.6884404353813068,
+        "roc_auc": 0.9911362109528632,
+        "tn": 202920,
+        "fp": 156,
+        "fn": 283,
+        "tp": 418
+      },
+      "calibration_tuned": {
+        "accuracy": 0.99784077692772,
+        "precision": 0.7023255813953488,
+        "recall": 0.6462196861626248,
+        "f1": 0.6731054977711739,
+        "average_precision": 0.6884404353813068,
+        "roc_auc": 0.9911362109528632,
+        "tn": 202884,
+        "fp": 192,
+        "fn": 248,
+        "tp": 453
+      },
+      "execution": {
+        "prepare": "cupy/cudf CUDA",
+        "encode": "cupy CUDA",
+        "resampling": "not_requested",
+        "tomek": "not_requested",
+        "classifier": "xgboost CUDA",
+        "classifier_parameters": {
+          "objective": "binary:logistic",
+          "base_score": null,
+          "booster": null,
+          "callbacks": null,
+          "colsample_bylevel": null,
+          "colsample_bynode": null,
+          "colsample_bytree": null,
+          "device": "cuda",
+          "early_stopping_rounds": null,
+          "enable_categorical": true,
+          "eval_metric": null,
+          "feature_types": null,
+          "feature_weights": null,
+          "gamma": null,
+          "grow_policy": null,
+          "importance_type": null,
+          "interaction_constraints": null,
+          "learning_rate": 0.1,
+          "max_bin": null,
+          "max_cat_threshold": null,
+          "max_cat_to_onehot": null,
+          "max_delta_step": null,
+          "max_depth": 6,
+          "max_leaves": null,
+          "min_child_weight": null,
+          "missing": "nan",
+          "monotone_constraints": null,
+          "multi_strategy": null,
+          "n_estimators": 100,
+          "n_jobs": null,
+          "num_parallel_tree": null,
+          "random_state": 42,
+          "reg_alpha": null,
+          "reg_lambda": null,
+          "sampling_method": null,
+          "scale_pos_weight": 1.0,
+          "subsample": null,
+          "tree_method": "hist",
+          "validate_parameters": null,
+          "verbosity": null
+        }
+      }
+    }
+  },
+  "source_rows": 2000000,
+  "source_sha256": "73be572b3e9a1a2510afe4ee79ec07faeb4b6b17724bbe36db3dc7ba4e4309bc",
+  "quality": {
+    "total": 2000000,
+    "invalid_dates": 0,
+    "invalid_dates_by_class": {},
+    "invalid_date_source_ids": []
+  },
+  "assumptions": [
+    "Rótulos disponíveis ao final do treino; atraso de confirmação não informado pela fonte.",
+    "Histórico offline assume disponibilidade imediata de transações anteriores.",
+    "Saldos anteriores devem estar disponíveis ao consumidor antes da execução."
+  ]
+}

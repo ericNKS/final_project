@@ -5,6 +5,9 @@ __pycache__/
 
 # Virtual environment
 .venv/
+.pytest_cache
+.venv-gpu/
+.cache/
 venv/
 env/
 
@@ -17,6 +20,7 @@ env/
 # Environment variables
 .env
 .env.*
+!.env.example
 
 # OS
 .DS_Store
