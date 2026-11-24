@@ -33,6 +33,8 @@ make serve
 | `make test` | Executar a suíte comum |
 | `make test-gpu` | Executar os testes CUDA reais |
 
+O dashboard `index.html` inclui gráficos em alta resolução, legendas explicativas e tabelas com rolagem horizontal. As matrizes de confusão mostram contagens e percentuais por classe real; as curvas incluem referências e as barras exibem os valores. `make report` atualiza a apresentação usando somente os resultados salvos, sem retreinar os modelos.
+
 `SCENARIO=all` é o padrão. `SOURCE=arquivo`, `RUN=pasta`, `RESULTS=pasta` e `ARGS="..."` passam opções aos comandos. Por exemplo:
 
 ```bash

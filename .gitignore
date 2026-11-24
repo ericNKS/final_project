@@ -30,3 +30,6 @@ Thumbs.db
 data/archive/*.csv
 
 logs/
+
+# Playwright artifacts
+.playwright-mcp/

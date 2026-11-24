@@ -294,42 +294,14 @@ def evaluate(run: Path) -> pd.DataFrame:
 def report(run: Path) -> Path:
     """Generate charts and an offline dashboard from frozen results, without fitting."""
     import html
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from sklearn.metrics import ConfusionMatrixDisplay, PrecisionRecallDisplay, RocCurveDisplay
+    from src.visualization.temporal_report import render_report_plots
 
     manifest = load_manifest(run)
     table = pd.read_csv(run / "metrics_test.csv")
     predictions = pd.read_parquet(run / "predictions_test.parquet")
     plots = run / "plots"
     plots.mkdir(exist_ok=True)
-    fig, axes = plt.subplots(1, 3, figsize=(17, 5))
-    for axis, family in zip(axes, manifest["models"]):
-        ConfusionMatrixDisplay.from_predictions(predictions.target, predictions[f"{family}_prediction"],
-                                                labels=[0, 1], ax=axis, colorbar=False)
-        axis.set_title(family)
-    fig.tight_layout()
-    fig.savefig(plots / "confusion.png")
-    plt.close(fig)
-    if predictions.target.nunique() == 2:
-        fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-        for family in manifest["models"]:
-            probability = predictions[f"{family}_score"]
-            PrecisionRecallDisplay.from_predictions(predictions.target, probability, name=family, ax=axes[0])
-            RocCurveDisplay.from_predictions(predictions.target, probability, name=family, ax=axes[1])
-        fig.tight_layout()
-        fig.savefig(plots / "curves.png")
-        plt.close(fig)
     validation = pd.DataFrame(json.loads((run / "validation.json").read_text()))
-    valid = validation.loc[validation.status.eq("ok")]
-    fig, axis = plt.subplots(figsize=(12, 7))
-    valid.groupby(["family", "strategy"]).validation_ap.mean().unstack().plot.bar(ax=axis)
-    axis.set_ylabel("AP média da validação temporal")
-    axis.set_title("Balanceamento: média das configurações manuais avaliadas")
-    fig.tight_layout()
-    fig.savefig(plots / "balancing.png")
-    plt.close(fig)
     calibration_rows = []
     for family, config in manifest["models"].items():
         for name in ("default", "tuned"):
@@ -341,13 +313,7 @@ def report(run: Path) -> Path:
         "prevalence": partition["classes"].get("1", 0) / partition["rows"],
         "start": partition["start"], "end": partition["end"]}
         for name, partition in manifest["partitions"].items()])
-    fig, axis = plt.subplots(figsize=(10, 5))
-    calibration_table.pivot(index="family", columns="threshold_type", values="f1").plot.bar(ax=axis)
-    axis.set_ylabel("F1 no período de calibração")
-    axis.set_title("Limiar 0,5 versus limiar ajustado — não é estimativa independente")
-    fig.tight_layout()
-    fig.savefig(plots / "thresholds.png")
-    plt.close(fig)
+    render_report_plots(manifest, predictions, validation, calibration_table, plots)
     notes = ("Campeão escolhido exclusivamente pela AP da validação temporal: " + manifest["champion"] +
              ". Limiar escolhido por F1 no período de calibração. O teste é descritivo. "
              "Escores não são probabilidades calibradas. Os cenários têm alvos diferentes; "
@@ -366,16 +332,33 @@ def report(run: Path) -> Path:
         "e validation.json para contagens antes/depois da reamostragem e motivos de inviabilidade.\n", encoding="utf-8")
     output = run / "index.html"
     output.write_text('<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Avaliação temporal Pix</title>'
-        '<h1>Avaliação temporal — ' + html.escape(manifest["scenario"]) + '</h1><p>' + html.escape(notes) + '</p>' +
-        '<h2>Períodos e prevalência</h2>' + partition_table.to_html(index=False, escape=True) +
-        '<h2>Teste reservado</h2>' + table.to_html(index=False, escape=True) + '<img alt="Balanceamento na validação" src="plots/balancing.png">' +
-        '<img alt="Ajuste do limiar por F1" src="plots/thresholds.png">' +
-        '<img alt="Matrizes de confusão" src="plots/confusion.png">' +
-        ('<img alt="Curvas PR e ROC" src="plots/curves.png">' if predictions.target.nunique() == 2 else '') +
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        '<style>body{margin:0;background:#f1f5f9;color:#0f172a;font:16px/1.6 system-ui,sans-serif}'
+        'main{max-width:1440px;margin:auto;padding:32px 24px}h1{font-size:2rem;line-height:1.2}'
+        'h2{margin-top:40px}p{max-width:100ch;color:#475569}'
+        'figure{margin:32px 0;padding:32px;background:white;border:1px solid #e2e8f0;border-radius:16px}'
+        'img{display:block;width:100%;height:auto}figcaption{padding:24px 12px 8px;color:#475569}'
+        '.table-scroll{overflow-x:auto;background:white;border-radius:12px;border:1px solid #e2e8f0}'
+        'table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:12px;text-align:left;border:0;white-space:nowrap}'
+        'th{background:#e2e8f0}tr:nth-child(even){background:#f8fafc}'
+        '@media(max-width:600px){main{padding:20px 12px}figure{padding:8px}h1{font-size:1.5rem}}'
+        '</style><main><h1>Avaliação temporal — ' + html.escape(manifest["scenario"]) + '</h1><p>' + html.escape(notes) + '</p>' +
+        ('<nav aria-label="Gráficos"><a href="#curvas">Ver curvas de precisão-recall e ROC</a></nav>'
+         if predictions.target.nunique() == 2 else '') +
+        '<h2>Períodos e prevalência</h2>' + '<div class="table-scroll">' + partition_table.to_html(index=False, escape=True) + '</div>' +
+        '<h2>Teste reservado</h2><div class="table-scroll">' + table.to_html(index=False, escape=True) + '</div><h2>Leitura dos resultados</h2>' + '<figure><img alt="AP média por modelo e estratégia de balanceamento na validação temporal" src="plots/balancing.png">'
+        '<figcaption>AP é a precisão média ao longo dos níveis de recall. Valores maiores indicam melhor discriminação. Cada barra resume as configurações viáveis avaliadas na validação.</figcaption></figure>' +
+        '<figure><img alt="F1 na calibração com limiar padrão e ajustado" src="plots/thresholds.png">'
+        '<figcaption>F1 combina precisão e recall. Este período foi usado para ajustar o limiar; o ganho mostrado não comprova desempenho no teste.</figcaption></figure>' +
+        '<figure><img alt="Matrizes de confusão com contagens e percentuais por classe real" src="plots/confusion.png">'
+        '<figcaption>Azul: positivos identificados corretamente (1,1). Cada célula mostra a contagem e o percentual dentro da classe real.</figcaption></figure>' +
+        ('<h2 id="curvas">Discriminação no teste: precisão-recall e ROC</h2>'
+         '<figure><img alt="Curvas de precisão-recall e ROC no teste, com referências" src="plots/curves.png">'
+         '<figcaption>Recall mede quantos positivos foram encontrados; precisão mede quantos sinalizados eram positivos. As linhas pontilhadas mostram referências. AUC resume a curva ROC; consulte também a curva de precisão-recall em bases desbalanceadas.</figcaption></figure>' if predictions.target.nunique() == 2 else '') +
         '<h2>Limitações e disponibilidade</h2><ul>' +
         ''.join('<li>' + html.escape(item) + '</li>' for item in
                 methodology_limits(manifest['scenario'], manifest.get('quality', {}))) +
-        '</ul></html>', encoding="utf-8")
+        '</ul></main></html>', encoding="utf-8")
     return output
 
 
