@@ -18,8 +18,8 @@ class StrictModel(BaseModel):
 
 class FinancialAttributes(StrictModel):
     tipo_transacao: str = Field(min_length=1, max_length=80)
-    saldo_anterior_pagador: Money
-    saldo_anterior_recebedor: Money
+    saldo_anterior_pagador: Money = Field(description="Saldo observado antes da decisão, obtido de fonte autorizada. Não enviar saldo posterior ou estimado.")
+    saldo_anterior_recebedor: Money = Field(description="Exige acesso autorizado ao saldo do recebedor antes da decisão. Sem esse acesso, o modelo 2m não é aplicável. A API não comprova a origem ou o instante de observação.")
 
 
 class RegistrationAttributes(StrictModel):

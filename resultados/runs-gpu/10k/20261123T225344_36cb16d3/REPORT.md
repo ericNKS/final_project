@@ -24,9 +24,11 @@ scenario                   run_id              family                           
 
 ## Limitações
 
-- Rótulos disponíveis ao final do treino; atraso de confirmação não informado pela fonte.
-- Histórico offline assume disponibilidade imediata de transações anteriores.
-- Saldos anteriores devem estar disponíveis ao consumidor antes da execução.
+- A fonte não informa quando os rótulos se tornaram conhecidos. O estudo assume disponibilidade no corte de treino; não comprova ausência de vazamento por atraso de rotulagem.
+- O histórico offline assume disponibilidade imediata dos eventos anteriores. Na API, somente pagamentos executados antes do evento e confirmados até a análise entram no histórico.
+- F1 é um objetivo experimental, sem custos financeiros de falsos positivos/negativos; o limiar não é uma política econômica ótima.
+- Indicadores cadastrais e bancos precisam ser conhecidos antes da decisão. O alvo 10k é anomalia cadastral, não confirmação de fraude financeira.
+- Cobertura temporal: 10000 linhas de origem; 24 datas inválidas excluídas, por classe: {'1': 24}. As métricas não avaliam essas exclusões nem demonstram detecção de anomalias de data.
 
 ## Justificativa de classificação
 

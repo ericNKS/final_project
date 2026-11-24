@@ -52,7 +52,7 @@ Para executar diretamente, use o mesmo ponto de entrada:
 .venv-gpu/bin/python main.py report --scenario all
 ```
 
-Os antigos scripts de treinamento, gráficos e verificação da raiz foram removidos. Os notebooks são registros exploratórios históricos e não fazem parte da execução operacional.
+Os antigos scripts de treinamento, gráficos e verificação da raiz foram removidos. Os scripts exploratórios foram arquivados como texto em [docs/archive](docs/archive/README.md), fora das rotas executáveis.
 
 ## Docker e Podman
 
@@ -92,6 +92,8 @@ Os resultados CPU continuam em `resultados/runs`. Sua reprodução exige o ambie
 ## API local
 
 A documentação interativa está em <http://[::1]:8000/docs> e o contrato está em [docs/openapi.json](docs/openapi.json). Esta versão é destinada ao uso local do TCC.
+
+O cenário 2m exige acesso autorizado aos saldos de ambas as partes antes da decisão. A API não comprova a origem desses saldos; sem esse acesso, o modelo não é aplicável. Consulte as condições e limitações em [METHODOLOGY.md](docs/METHODOLOGY.md).
 
 ### Analisar antes de executar
 

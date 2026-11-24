@@ -620,7 +620,8 @@
                 "type": "string"
               }
             ],
-            "title": "Saldo Anterior Pagador"
+            "title": "Saldo Anterior Pagador",
+            "description": "Saldo observado antes da decisão, obtido de fonte autorizada. Não enviar saldo posterior ou estimado."
           },
           "saldo_anterior_recebedor": {
             "anyOf": [
@@ -631,7 +632,8 @@
                 "type": "string"
               }
             ],
-            "title": "Saldo Anterior Recebedor"
+            "title": "Saldo Anterior Recebedor",
+            "description": "Exige acesso autorizado ao saldo do recebedor antes da decisão. Sem esse acesso, o modelo 2m não é aplicável. A API não comprova a origem ou o instante de observação."
           }
         },
         "additionalProperties": false,

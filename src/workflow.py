@@ -26,6 +26,22 @@ RESULTS = ROOT / "resultados" / "runs"
 GPU_RESULTS = ROOT / "resultados" / "runs-gpu"
 
 
+def methodology_limits(scenario: Scenario, quality: dict) -> list[str]:
+    """State observability assumptions without claiming evidence absent from sources."""
+    notes = [
+        "A fonte não informa quando os rótulos se tornaram conhecidos. O estudo assume disponibilidade no corte de treino; não comprova ausência de vazamento por atraso de rotulagem.",
+        "O histórico offline assume disponibilidade imediata dos eventos anteriores. Na API, somente pagamentos executados antes do evento e confirmados até a análise entram no histórico.",
+        "F1 é um objetivo experimental, sem custos financeiros de falsos positivos/negativos; o limiar não é uma política econômica ótima.",
+    ]
+    if scenario == "2m":
+        notes.append("Aplicável somente a integrações com acesso legítimo aos saldos do pagador E do recebedor antes da decisão. O nome saldo_anterior não comprova disponibilidade. A API valida formato, mas não verifica a origem ou o instante da observação; sem esses saldos, este modelo não deve ser usado nem receber valores inventados.")
+    else:
+        notes.append("Indicadores cadastrais e bancos precisam ser conhecidos antes da decisão. O alvo 10k é anomalia cadastral, não confirmação de fraude financeira.")
+    excluded = quality.get("invalid_dates", 0)
+    notes.append(f"Cobertura temporal: {quality.get('total', 'não informado')} linhas de origem; {excluded} datas inválidas excluídas, por classe: {quality.get('invalid_dates_by_class', {})}. As métricas não avaliam essas exclusões nem demonstram detecção de anomalias de data.")
+    return notes
+
+
 def write_json(path: Path, value: dict | list) -> None:
     """Atomically publish JSON; never expose a partly written active-model pointer."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -191,9 +207,7 @@ def train(scenario: Scenario, source: Path | None = None, backend: str = "gpu",
                 "tuning_rows": len(tuning), "models": {}, "source_rows": len(raw),
                 "source_sha256": digest(source) if source else None,
                 "quality": quality,
-                "assumptions": ["Rótulos disponíveis ao final do treino; atraso de confirmação não informado pela fonte.",
-                                "Histórico offline assume disponibilidade imediata de transações anteriores.",
-                                "Saldos anteriores devem estar disponíveis ao consumidor antes da execução."]}
+                "assumptions": methodology_limits(scenario, quality)}
     calibration = pd.DataFrame({"target": y.loc[split.calibration]})
     for family, selected in chosen.items():
         print(f"[{scenario}] Ajuste final: {selected['candidate']} | {len(split.development):,} registros", flush=True)
@@ -342,7 +356,7 @@ def report(run: Path) -> Path:
         "\n\n## Períodos e prevalência\n\n```\n" + partition_table.to_string(index=False) +
         "\n```\n\nAs prevalências podem mudar entre períodos. O limiar é fixado antes do teste; "
         "mudanças de distribuição não autorizam ajustá-lo usando o teste.\n\n## Teste reservado\n\n```\n" + table.to_string(index=False) +
-        "\n```\n\n## Limitações\n\n" + "\n".join("- " + item for item in manifest["assumptions"]) +
+        "\n```\n\n## Limitações\n\n" + "\n".join("- " + item for item in methodology_limits(manifest["scenario"], manifest.get("quality", {}))) +
         "\n\n## Justificativa de classificação\n\n" +
         "O balanceamento foi escolhido pela AP da validação progressiva, sem reamostrar validação ou teste. "
         "Pesos são calculados somente no treino de cada janela; configurações combinando pesos e síntese não são usadas. "
@@ -358,7 +372,10 @@ def report(run: Path) -> Path:
         '<img alt="Ajuste do limiar por F1" src="plots/thresholds.png">' +
         '<img alt="Matrizes de confusão" src="plots/confusion.png">' +
         ('<img alt="Curvas PR e ROC" src="plots/curves.png">' if predictions.target.nunique() == 2 else '') +
-        '</html>', encoding="utf-8")
+        '<h2>Limitações e disponibilidade</h2><ul>' +
+        ''.join('<li>' + html.escape(item) + '</li>' for item in
+                methodology_limits(manifest['scenario'], manifest.get('quality', {}))) +
+        '</ul></html>', encoding="utf-8")
     return output
 
 
